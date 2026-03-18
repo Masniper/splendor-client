@@ -1,5 +1,5 @@
 import { Player, GemColor, TurnPhase } from '../game/models';
-import { gemStyles, gemIconSrc } from '../constants';
+import { gemStylesBank, gemIconSrc } from '../constants';
 import { getTotalTokens, canAffordCard } from '../game/actions';
 import { DevelopmentCard } from './DevelopmentCard';
 import { NobleTile } from './NobleTile';
@@ -65,7 +65,7 @@ export const PlayerDashboard = ({ player, isActive, isCurrentPlayer, turnPhase, 
         <div className="grid grid-cols-6 gap-1">
           {tokenColors.map((color) => {
             const amount = player.ownedTokens[color];
-            const style = gemStyles[color];
+            const style = gemStylesBank[color];
             const isEmpty = amount === 0;
             return (
               <div 
@@ -78,8 +78,8 @@ export const PlayerDashboard = ({ player, isActive, isCurrentPlayer, turnPhase, 
                     alt={color}
                     className="pointer-events-none w-6 h-6 object-contain opacity-95"
                   />
-                  <span className="absolute inset-0 flex items-center justify-center drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)]">
-                    {amount}
+                 <span className="absolute top-4 text-lg  font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+                   {amount}
                   </span>
                 </div>
               </div>

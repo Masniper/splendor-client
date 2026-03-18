@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { Player, GemColor } from '../game/models';
-import { gemStyles } from '../constants';
+import { gemStylesBank } from '../constants';
 
 interface GameOverModalProps {
   players: Player[];
@@ -51,7 +51,7 @@ export const GameOverModal = ({ players, winner, onRestart, isDark }: GameOverMo
             const amount = player.ownedTokens[color];
             if (amount === 0) return null;
             return (
-              <div key={color} className={`w-5 h-5 rounded-full ${gemStyles[color].chip} border flex items-center justify-center text-[8px] font-bold`}>
+              <div key={color} className={`w-5 h-5 rounded-full ${gemStylesBank[color].chip} border flex items-center justify-center text-[8px] font-bold`}>
                 {amount}
               </div>
             );

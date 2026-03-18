@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { GemColor, TurnPhase } from '../game/models';
-import { gemStyles, gemIconSrc } from '../constants';
+import { gemStylesBank, gemIconSrc } from '../constants';
 
 interface TokenBankProps {
   bank: Record<GemColor, number>;
@@ -46,7 +46,7 @@ export const TokenBank = ({ bank, selectedTokens, onTokenClick, onTakeTokens, on
           const amount = bank[color];
           const isSelected = selectedTokens.includes(color);
           const selectionCount = selectedTokens.filter(c => c === color).length;
-          const style = gemStyles[color];
+          const style = gemStylesBank[color];
           return (
             <motion.button 
               key={color}

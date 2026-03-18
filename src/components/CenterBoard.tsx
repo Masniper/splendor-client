@@ -40,7 +40,9 @@ export const CenterBoard = ({
         </div>
         <div className="flex-1 flex justify-center items-center gap-5 sm:gap-10 ">
           {gameState.boardNobles.map((noble) => (
-            <NobleTile key={noble.id} noble={noble} />
+            <div key={noble.id}>
+              <NobleTile noble={noble} />
+            </div>
           ))}
         </div>
       </div>
@@ -63,14 +65,15 @@ export const CenterBoard = ({
                 turnPhase={gameState.turnPhase} 
               />
               {gameState.boardCards[`level${level}` as keyof typeof gameState.boardCards].map((card) => (
-                <DevelopmentCard 
-                  key={card.id} 
-                  card={card} 
-                  affordable={canAffordCard(currentPlayer, card)}
-                  turnPhase={gameState.turnPhase}
-                  onBuy={() => onBuyCard(card.id)}
-                  onReserve={() => onReserveCard(card.id)}
-                />
+                <div key={card.id}>
+                  <DevelopmentCard 
+                    card={card} 
+                    affordable={canAffordCard(currentPlayer, card)}
+                    turnPhase={gameState.turnPhase}
+                    onBuy={() => onBuyCard(card.id)}
+                    onReserve={() => onReserveCard(card.id)}
+                  />
+                </div>
               ))}
             </div>
           ))}

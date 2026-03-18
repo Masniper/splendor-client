@@ -38,7 +38,7 @@ export const CenterBoard = ({
             Nobles
           </h3>
         </div>
-        <div className="flex-1 flex justify-center items-center gap-10 sm:gap-10 ">
+        <div className="flex-1 flex justify-center items-center gap-5 sm:gap-10 ">
           {gameState.boardNobles.map((noble) => (
             <NobleTile key={noble.id} noble={noble} />
           ))}

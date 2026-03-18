@@ -1,0 +1,5 @@
+{
+  "name": "Splendor Engine",
+  "description": "Core game engine and architecture for a digital version of the board game Splendor.",
+  "requestFramePermissions": []
+}

@@ -1,0 +1,20 @@
+{
+  "name": "Splendor",
+  "short_name": "Splendor",
+  "description": "A modern React + TypeScript implementation of Splendor (board game) built with Vite.",
+  "icons": [
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#d97706",
+  "background_color": "#0a0a0a",
+  "display": "standalone"
+}

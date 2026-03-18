@@ -23,11 +23,18 @@ export const GameSetup = ({ onStart, theme, onThemeToggle }: GameSetupProps) => 
   };
 
   return (
-    <div className={`min-h-screen flex items-center justify-center p-4 font-sans relative overflow-hidden transition-colors duration-500 ${isDark ? 'bg-zinc-900' : 'bg-gray-100'}`}>
-      {/* Decorative background elements */}
-      <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none bg-[url('https://loremflickr.com/1920/1080/nature,landscape?lock=setup')] bg-cover bg-center mix-blend-overlay" />
+    <div
+      className={`min-h-screen flex items-center justify-center p-4 font-sans relative overflow-hidden transition-colors duration-500 bg-cover bg-center bg-fixed ${isDark ? 'text-stone-100' : 'text-gray-800'}`}
+      style={{
+        backgroundImage: `linear-gradient(${isDark ? "rgba(0,0,0,0.22)" : "rgba(255,255,255,0.14)"}, ${isDark ? "rgba(0,0,0,0.22)" : "rgba(255,255,255,0.14)"}), url('/images/startup-bg.jpg')`,
+      }}
+    >
       
-      <div className={`backdrop-blur-md p-10 rounded-3xl border-2 shadow-2xl max-w-xl w-full text-center relative z-10 transition-colors ${isDark ? 'bg-zinc-800/90 border-amber-600/50' : 'bg-white/90 border-amber-500/30'}`}>
+      <div
+        className={`p-10 rounded-3xl border-2 shadow-xl max-w-xl w-full text-center relative z-10 transition-colors
+          ${isDark ? 'bg-zinc-900/80 border-zinc-700/70' : 'bg-white/90 border-gray-200/80'}
+        `}
+      >
         <div className="absolute top-4 right-4">
            <button onClick={onThemeToggle} className={`p-2 rounded-full transition-colors ${isDark ? 'bg-zinc-700 text-amber-400 hover:bg-zinc-600' : 'bg-gray-200 text-amber-600 hover:bg-gray-300'}`}>
               {theme === 'dark' ? '☀️' : '🌙'}

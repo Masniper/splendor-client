@@ -38,7 +38,7 @@ export const NobleTile = ({ noble, onClick, isSelectable }: NobleTileProps) => {
               className={`
                 w-3.5 h-3.5 sm:w-5 sm:h-5 lg:w-6 lg:h-6 
                 rounded sm:rounded-md border border-white/40 
-                flex items-center  
+                flex items-center justify-center
                 text-[8px] sm:text-[10px] lg:text-xs font-bold 
                 shadow-inner font-sans drop-shadow-sm 
                 ${gemStyles[color as GemColor].chip}

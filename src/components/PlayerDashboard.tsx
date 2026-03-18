@@ -30,7 +30,12 @@ export const PlayerDashboard = ({ player, isActive, isCurrentPlayer, turnPhase, 
   };
 
   return (
-    <div className={`rounded-2xl border-2 p-4 flex flex-col shadow-xl transition-all relative ${isDark ? 'bg-zinc-800' : 'bg-white'} ${isActive ? 'border-yellow-400 ring-4 ring-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.4)]' : isDark ? 'border-zinc-700' : 'border-gray-200'}`}>
+    <div
+      className={`rounded-2xl border-2 p-4 flex flex-col shadow-inner transition-all relative
+        ${isDark ? 'bg-zinc-800/50' : 'bg-white/70'}
+        ${isActive ? 'border-yellow-400 ring-4 ring-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.4)]' : isDark ? 'border-zinc-700/50' : 'border-gray-200/70'}
+      `}
+    >
       {isActive && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-400 text-zinc-900 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-lg z-20 whitespace-nowrap border-2 border-zinc-900">
           Current Turn

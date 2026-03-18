@@ -32,7 +32,7 @@ export const TokenBank = ({ bank, selectedTokens, onTokenClick, onTakeTokens, on
   );
 
   return (
-    <div className={`p-3 rounded-2xl border shadow-xl transition-colors flex flex-col h-full w-full ${isDark ? 'bg-zinc-800/80 border-zinc-700' : 'bg-white border-gray-200'}`}>
+    <div className={`p-3 rounded-2xl border shadow-inner transition-colors flex flex-col h-full w-full ${isDark ? 'bg-zinc-800/50 border-zinc-700/50' : 'bg-white/70 border-gray-200/70'}`}>
       
       <div className="flex items-center justify-between mb-1 min-h-[32px]">
         <h3 className={`text-xs sm:text-sm font-bold uppercase tracking-wider font-serif ${isDark ? 'text-stone-300' : 'text-gray-700'}`}>

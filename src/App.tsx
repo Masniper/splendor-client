@@ -97,7 +97,10 @@ export default function App() {
 
   return (
     <div
-      className={`min-h-screen w-full overflow-y-auto transition-colors duration-500 p-2 sm:p-4 lg:p-8 font-sans flex flex-col ${isDark ? "bg-zinc-900 text-stone-100" : "bg-gray-100 text-gray-800"}`}
+      className={`min-h-screen w-full overflow-y-auto transition-colors duration-500 p-2 sm:p-4 lg:p-8 pt-14 sm:pt-16 font-sans flex flex-col bg-cover bg-center bg-fixed ${isDark ? "text-stone-100" : "text-gray-800"}`}
+      style={{
+        backgroundImage: `linear-gradient(${isDark ? "rgba(0,0,0,0.22)" : "rgba(255,255,255,0.16)"}, ${isDark ? "rgba(0,0,0,0.22)" : "rgba(255,255,255,0.16)"}), url('/images/game-bg.jpg')`,
+      }}
     >
       {/* Toast Notification */}
       <AnimatePresence>
@@ -143,7 +146,7 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center backdrop-blur-sm p-4"
+            className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
@@ -161,16 +164,17 @@ export default function App() {
               </p>
               <div className="flex flex-wrap justify-center gap-4 sm:gap-6">
                 {gameState.pendingNobles.map((noble) => (
-                  <NobleTile
-                    key={noble.id}
-                    noble={noble}
-                    isSelectable={true}
-                    onClick={() =>
-                      handleAction(() =>
-                        setGameState(chooseNoble(gameState, noble.id)),
-                      )
-                    }
-                  />
+                  <div key={noble.id}>
+                    <NobleTile
+                      noble={noble}
+                      isSelectable={true}
+                      onClick={() =>
+                        handleAction(() =>
+                          setGameState(chooseNoble(gameState, noble.id)),
+                        )
+                      }
+                    />
+                  </div>
                 ))}
               </div>
             </motion.div>
@@ -182,7 +186,7 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center backdrop-blur-sm p-4"
+            className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
@@ -259,12 +263,43 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* Turn Indicator (always visible) */}
+      <div className="fixed top-0 left-0 right-0 z-50">
+        <div className="max-w-7xl mx-auto w-full px-2 sm:px-4 lg:px-8 pt-2">
+          {gameState.winner ? (
+            <div className="flex justify-end">
+              <div className="text-sm sm:text-lg font-bold text-emerald-500 font-serif bg-black/25 px-4 sm:px-6 py-2 rounded-full border border-white/10 shadow-md">
+                Winner: {gameState.winner.name}!
+              </div>
+            </div>
+          ) : (
+            <div className="flex justify-end">
+              <div
+                className={`text-sm sm:text-base px-4 sm:px-6 py-2 rounded-full border shadow-md font-serif transition-colors
+                  ${isDark ? "text-stone-200 bg-zinc-900/60 border-zinc-700/50" : "text-gray-800 bg-white/65 border-gray-200/70"}
+                `}
+              >
+                Turn:{" "}
+                <span className="font-bold text-amber-500">
+                  {currentPlayer.name}
+                </span>
+                {gameState.isLastRound && (
+                  <span className="ml-2 sm:ml-3 text-red-500 font-bold animate-pulse font-sans text-[10px] sm:text-xs uppercase tracking-wider">
+                    Last Round!
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Header */}
-      <div className="max-w-7xl mx-auto w-full flex flex-col sm:flex-row justify-between items-center mb-4 lg:mb-6 gap-3 shrink-0">
-        <h1 className="text-3xl sm:text-4xl font-bold text-amber-500 tracking-wider uppercase drop-shadow-lg font-serif">
+      <div className="max-w-7xl mx-auto w-full flex flex-row justify-between items-center mb-4 lg:mb-6 gap-2 sm:gap-3 shrink-0 min-w-0">
+        <h1 className="text-2xl sm:text-4xl font-bold text-amber-500 tracking-wider uppercase drop-shadow-lg font-serif whitespace-nowrap">
           Splendor
         </h1>
-        <div className="flex items-center gap-3 sm:gap-6">
+        <div className="flex items-center gap-2 sm:gap-6 flex-nowrap shrink-0">
           <button
             onClick={() => setShowRules(true)}
             className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-full font-bold transition-all shadow-md flex items-center gap-2 text-sm sm:text-base ${isDark ? "bg-zinc-800 text-stone-300 hover:bg-zinc-700" : "bg-white text-gray-700 hover:bg-gray-50 border border-gray-200"}`}
@@ -277,25 +312,6 @@ export default function App() {
           >
             {theme === "dark" ? "☀️" : "🌙"}
           </button>
-          {gameState.winner ? (
-            <div className="text-lg sm:text-2xl font-bold text-emerald-500 animate-pulse font-serif">
-              Winner: {gameState.winner.name}!
-            </div>
-          ) : (
-            <div
-              className={`text-sm sm:text-xl px-4 sm:px-6 py-1.5 sm:py-2 rounded-full border shadow-inner font-serif transition-colors ${isDark ? "text-stone-300 bg-zinc-800 border-zinc-700" : "text-gray-700 bg-white border-gray-200"}`}
-            >
-              Turn:{" "}
-              <span className="font-bold text-amber-500">
-                {currentPlayer.name}
-              </span>
-              {gameState.isLastRound && (
-                <span className="ml-2 sm:ml-3 text-red-500 font-bold animate-pulse font-sans text-[10px] sm:text-sm uppercase tracking-wider">
-                  Last Round!
-                </span>
-              )}
-            </div>
-          )}
         </div>
       </div>
 

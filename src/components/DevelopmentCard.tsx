@@ -118,10 +118,12 @@ interface DeckProps {
   count: number;
   onReserve: () => void;
   turnPhase: TurnPhase;
+  isDark: boolean;
+
 }
 
 export const Deck = (props: DeckProps) => {
-  const { level, count, onReserve, turnPhase } = props;
+  const { level, count, onReserve, turnPhase, isDark } = props;
   const [showMenu, setShowMenu] = useState(false);
 
   const bgColors = {
@@ -137,7 +139,7 @@ export const Deck = (props: DeckProps) => {
       onMouseLeave={() => setShowMenu(false)}
       className={`w-full min-w-[70px] max-w-[85px] sm:min-w-[90px] sm:max-w-[130px] lg:max-w-[160px] aspect-[2/3] shrink-0 rounded-xl ${bgColors[level]} ring-1 ring-white/20 border-2 border-yellow-600/50 flex flex-col items-center justify-center shadow-lg relative group overflow-hidden cursor-pointer`}
     >
-      <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]" />
+      <div className={`absolute inset-0 opacity-50 ${isDark ? "bg-[url('https://www.transparenttextures.com/patterns/diagmonds.png')]" : " bg-[url('https://www.transparenttextures.com/patterns/diagmonds-light.png')]"}`} />
       
       <span className="text-yellow-400 font-serif font-bold text-[10px] sm:text-lg lg:text-2xl drop-shadow-md relative z-10">Splendor</span>
       <span className="text-white/80 text-[8px] sm:text-xs lg:text-sm font-serif mt-0.5 sm:mt-1 relative z-10">{count} cards</span>

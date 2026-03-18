@@ -63,6 +63,7 @@ export const CenterBoard = ({
                 count={gameState.decks[`level${level}` as keyof typeof gameState.decks].length} 
                 onReserve={() => onReserveFromDeck(level as 1|2|3)} 
                 turnPhase={gameState.turnPhase} 
+                isDark={isDark}
               />
               {gameState.boardCards[`level${level}` as keyof typeof gameState.boardCards].map((card) => (
                 <div key={card.id}>

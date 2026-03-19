@@ -2,15 +2,31 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Player, GemColor } from '../game/models';
 import { gemStylesBank } from '../constants';
 
+interface RematchState {
+  enabled: boolean;
+  requestedBy: string[];
+  totalPlayers: number;
+  message?: string;
+}
+
 interface GameOverModalProps {
   players: Player[];
   winner: Player;
-  onRestart: () => void;
+  localPlayerName: string;
+  rematchState: RematchState | null;
+  onRequestRematch: () => void;
+  onBackToMenu: () => void;
   isDark: boolean;
 }
 
-export const GameOverModal = ({ players, winner, onRestart, isDark }: GameOverModalProps) => {
+export const GameOverModal = ({ players, winner, localPlayerName, rematchState, onRequestRematch, isDark,onBackToMenu }: GameOverModalProps) => {
   const losers = players.filter(p => p.id !== winner.id).sort((a, b) => b.currentScore - a.currentScore);
+
+  const rematchEnabled = rematchState?.enabled ?? true;
+  const requestedBy = rematchState?.requestedBy ?? [];
+  const totalPlayers = rematchState?.totalPlayers ?? players.length;
+  const hasRequestedRematch = requestedBy.includes(localPlayerName);
+  const waitingForOthers = hasRequestedRematch && requestedBy.length < totalPlayers;
 
   const PlayerStats = ({ player, isWinner = false }: { player: Player, isWinner?: boolean, key?: any }) => {
     const totalTokens = Object.values(player.ownedTokens).reduce((a, b) => a + b, 0);
@@ -94,12 +110,44 @@ export const GameOverModal = ({ players, winner, onRestart, isDark }: GameOverMo
             ))}
           </div>
 
-          <button 
-            onClick={onRestart}
-            className="mt-8 w-full py-4 bg-amber-600 text-white rounded-2xl font-black text-xl uppercase tracking-widest hover:bg-amber-500 shadow-lg transition-all active:scale-95 shadow-amber-900/20"
-          >
-            Play Again
-          </button>
+          <div className="mt-8">
+            {rematchState?.message && (
+              <p className={`text-sm mb-3 ${isDark ? 'text-stone-300' : 'text-gray-600'}`}>{rematchState.message}</p>
+            )}
+
+            <div className="flex gap-3 mb-4">
+              <button
+                onClick={onRequestRematch}
+                disabled={!rematchEnabled || hasRequestedRematch}
+                className={`flex-1 py-3 rounded-2xl font-bold text-lg uppercase tracking-widest transition-all active:scale-95 shadow-lg ${
+                  rematchEnabled
+                    ? 'bg-amber-600 text-white hover:bg-amber-500 shadow-amber-900/20'
+                    : 'bg-gray-400 text-gray-100 cursor-not-allowed'
+                } ${hasRequestedRematch ? 'opacity-75 cursor-not-allowed' : ''}`}
+              >
+                {!rematchEnabled
+                  ? 'Rematch Disabled'
+                  : hasRequestedRematch
+                  ? 'Waiting...'
+                  : 'Rematch'}
+              </button>
+
+              <button
+                onClick={onBackToMenu}
+                className={`flex-1 py-3 rounded-2xl font-bold text-lg uppercase tracking-widest transition-all active:scale-95 shadow-lg ${
+                  isDark ? 'bg-zinc-700 text-stone-300 hover:bg-zinc-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                Menu
+              </button>
+            </div>
+
+            {rematchEnabled && requestedBy.length > 0 && (
+              <p className={`text-sm ${isDark ? 'text-stone-300' : 'text-gray-600'}`}>
+                Rematch ready: {requestedBy.length}/{totalPlayers}
+              </p>
+            )}
+          </div>
         </div>
       </motion.div>
     </div>

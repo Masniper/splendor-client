@@ -12,10 +12,11 @@ interface LobbyProps {
   isHost: boolean;
   onStartGame: () => void;
   onLeaveRoom: () => void;
+  onLogout?: () => void;
   theme: 'light' | 'dark';
 }
 
-export const Lobby = ({ roomCode, players, isHost, onStartGame, onLeaveRoom, theme }: LobbyProps) => {
+export const Lobby = ({ roomCode, players, isHost, onStartGame, onLeaveRoom, onLogout, theme }: LobbyProps) => {
   const [copied, setCopied] = useState(false);
   const isDark = theme === 'dark';
 
@@ -37,6 +38,20 @@ export const Lobby = ({ roomCode, players, isHost, onStartGame, onLeaveRoom, the
           ${isDark ? 'bg-zinc-900/90 border-zinc-700/70' : 'bg-white/95 border-gray-200/80'}
         `}
       >
+        {/* {onLogout && (
+          <div className="absolute top-4 left-4">
+            <button
+              onClick={onLogout}
+              className={`px-3 py-2 rounded-lg font-bold transition-colors ${
+                isDark
+                  ? 'bg-zinc-800 text-red-300 hover:bg-zinc-700 border border-zinc-700'
+                  : 'bg-gray-100 text-red-600 hover:bg-gray-200 border border-gray-200'
+              }`}
+            >
+              Logout
+            </button>
+          </div>
+        )} */}
         <h2 className="text-3xl font-bold font-serif mb-2 text-amber-500 tracking-wide uppercase">Game Lobby</h2>
         <p className={`mb-6 text-sm ${isDark ? 'text-stone-400' : 'text-gray-500'}`}>
           Waiting for other players to join...

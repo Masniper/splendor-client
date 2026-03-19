@@ -1,30 +1,106 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { initializeGame } from './game/setup';
 import { GemColor, GameState } from './game/models';
-import { takeTokens, purchaseCard, reserveCard, reserveCardFromDeck, discardTokens, chooseNoble, getTotalTokens, GameError } from './game/actions';
-import { noblesData, level1Cards, level2Cards, level3Cards } from './game/data';
 import { gemStyles } from './constants';
+import { socket } from './network/socket';
 
 // Components
+import { AuthScreen } from './components/AuthScreen';
 import { GameSetup } from './components/GameSetup';
 import { PlayerDashboard } from './components/PlayerDashboard';
 import { CenterBoard } from './components/CenterBoard';
 import { NobleTile } from './components/NobleTile';
 import { GameOverModal } from './components/GameOverModal';
 import { HowToPlayModal } from './components/HowToPlayModal';
+import { Lobby } from './components/Lobby';
 
 export default function App() {
+  // Auth States
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authToken, setAuthToken] = useState<string | null>(null);
+
+  // Network & Room States
+  const [roomCode, setRoomCode] = useState<string | null>(null);
+  const [localPlayerName, setLocalPlayerName] = useState<string>('');
+  const [lobbyPlayers, setLobbyPlayers] = useState<string[]>([]);
+  const [isHost, setIsHost] = useState(false);
+
+  // Game States
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [selectedTokens, setSelectedTokens] = useState<GemColor[]>([]);
   const [discardSelection, setDiscardSelection] = useState<GemColor[]>([]);
-  const [toast, setToast] = useState<{ message: string, type: 'error' | 'success' } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
+  
+  // UI States
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [showRules, setShowRules] = useState(false);
 
   // Refs for auto-scrolling
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const playerRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  // ------------------------------------------------------------------------
+  // SOCKET LISTENERS
+  // ------------------------------------------------------------------------
+  useEffect(() => {
+    // مطابق پروتکل جدید بک‌اند (room.handler.ts و game.handler.ts)
+    const handleRoomCreated = (data: { roomId: string; room: any }) => {
+      setRoomCode(data.roomId);
+      setIsHost(true);
+      setLobbyPlayers(
+        (data.room.players || []).map(
+          (p: any, index: number) => p.username || `Player ${index + 1}`,
+        ),
+      );
+    };
+
+    const handleRoomUpdated = (data: { room: any }) => {
+      const room = data.room;
+      if (!room) return;
+
+      setLobbyPlayers(
+        (room.players || []).map(
+          (p: any, index: number) => p.username || `Player ${index + 1}`,
+        ),
+      );
+
+      // اگر کاربر تازه جوین کرده و هنوز roomCode ست نشده است
+      setRoomCode((prev) => prev ?? room.id);
+    };
+
+    const handleGameUpdated = (payload: { gameState: GameState }) => {
+      const newState = payload.gameState;
+      setGameState(newState);
+      setSelectedTokens([]);
+      setDiscardSelection([]);
+    };
+
+    const handleGameStarted = (payload: { gameState: GameState }) => {
+      const newState = payload.gameState;
+      setGameState(newState);
+      setSelectedTokens([]);
+      setDiscardSelection([]);
+    };
+
+    const handleGameError = (data: { message: string }) => {
+      showToast(data.message, 'error');
+    };
+
+    socket.on('room:created', handleRoomCreated);
+    socket.on('room:updated', handleRoomUpdated);
+    socket.on('game:updated', handleGameUpdated);
+    socket.on('game:started', handleGameStarted);
+    socket.on('game:error', handleGameError);
+
+    // Cleanup listeners on unmount
+    return () => {
+      socket.off('room:created', handleRoomCreated);
+      socket.off('room:updated', handleRoomUpdated);
+      socket.off('game:updated', handleGameUpdated);
+      socket.off('game:started', handleGameStarted);
+      socket.off('game:error', handleGameError);
+    };
+  }, []);
 
   // Auto-scroll to current player when turn changes
   useEffect(() => {
@@ -34,40 +110,149 @@ export default function App() {
         activePlayerElement.scrollIntoView({
           behavior: 'smooth',
           inline: 'center',
-          block: 'nearest'
+          block: 'nearest',
         });
       }
     }
   }, [gameState?.currentPlayerIndex]);
 
-  const handleStartGame = (names: string[]) => {
-    setGameState(initializeGame(names, level1Cards, level2Cards, level3Cards, noblesData));
+  // ------------------------------------------------------------------------
+  // AUTH ACTIONS
+  // ------------------------------------------------------------------------
+  const handleLogin = (token: string, username: string) => {
+    setAuthToken(token);
+    setLocalPlayerName(username);
+    setIsAuthenticated(true);
+  };
+
+  const handlePlayGuest = (guestName: string) => {
+    setLocalPlayerName(guestName);
+    setIsAuthenticated(true);
+  };
+
+  // ------------------------------------------------------------------------
+  // NETWORK ACTIONS
+  // ------------------------------------------------------------------------
+  const setupSocketConnection = (displayName?: string) => {
+    const usernameForSocket = displayName || localPlayerName || undefined;
+
+    if (authToken) {
+      socket.auth = { token: authToken, username: usernameForSocket };
+    } else {
+      // در حالت مهمان، فقط نام نمایشی را می‌فرستیم (توکن از /auth/guest می‌آید)
+      socket.auth = { token: 'guest_mode', username: usernameForSocket }; 
+    }
+    if (!socket.connected) {
+      socket.connect();
+    }
+  };
+
+  const handleCreateRoom = (nameFromSetup: string) => {
+    const finalName = localPlayerName || nameFromSetup;
+    setLocalPlayerName(finalName);
+    setupSocketConnection(finalName);
+    // ایجاد روم مطابق بک‌اند: room.handler.ts → 'room:create'
+    socket.emit('room:create');
+  };
+
+  const handleJoinRoom = (nameFromSetup: string, code: string) => {
+    const finalName = localPlayerName || nameFromSetup;
+    setLocalPlayerName(finalName);
+    setupSocketConnection(finalName);
+    // جوین روم مطابق بک‌اند: 'room:join' با roomId به‌صورت string
+    socket.emit('room:join', code.toUpperCase());
+  };
+
+  const handleLeaveRoom = () => {
+    if (roomCode) {
+      socket.emit('leaveRoom', { roomCode });
+    }
+    setRoomCode(null);
+    setLobbyPlayers([]);
+    setIsHost(false);
+    setGameState(null);
+  };
+
+  const handleStartGame = () => {
+    if (roomCode) {
+      // شروع بازی مطابق بک‌اند: room.handler.ts → 'room:start'
+      socket.emit('room:start', roomCode);
+    }
   };
 
   const handleRestart = () => {
-    setGameState(null);
-    setSelectedTokens([]);
-    setDiscardSelection([]);
+    if (roomCode) {
+      socket.emit('restartGame', { roomCode });
+    }
   };
 
+  // Generalized function to emit player actions to the server
+  const emitAction = (actionType: string, payload?: any) => {
+    if (!gameState || !roomCode) return;
+    
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    
+    // Client-side validation to prevent sending actions if it's not their turn
+    if (currentPlayer.name !== localPlayerName) {
+      showToast("It's not your turn!", 'error');
+      return;
+    }
+
+    // تمام اکشن‌ها از بک‌اند هندل می‌شوند؛
+    // فقط نوع اکشن را به ایونت‌های game.handler.ts مپ می‌کنیم.
+    switch (actionType) {
+      case 'TAKE_TOKENS': {
+        const tokens: GemColor[] = payload?.tokens || [];
+        socket.emit('game:takeTokens', roomCode, tokens);
+        break;
+      }
+      case 'PURCHASE_CARD': {
+        const cardId: string = payload?.cardId;
+        if (!cardId) return;
+        socket.emit('game:purchaseCard', roomCode, cardId);
+        break;
+      }
+      case 'RESERVE_CARD': {
+        const cardId: string = payload?.cardId;
+        if (!cardId) return;
+        socket.emit('game:reserveCard', roomCode, cardId);
+        break;
+      }
+      case 'RESERVE_FROM_DECK': {
+        const level: 1 | 2 | 3 = payload?.level;
+        if (!level) return;
+        // در بک‌اند فقط reserveCardFromBoard داریم؛
+        // اگر بعداً ایونت مخصوص دِک اضافه شد، این‌جا آپدیت می‌شود.
+        socket.emit('game:reserveFromDeck', roomCode, level);
+        break;
+      }
+      case 'DISCARD_TOKENS': {
+        const tokens: GemColor[] = payload?.tokens || [];
+        socket.emit('game:discardTokens', roomCode, tokens);
+        break;
+      }
+      case 'CHOOSE_NOBLE': {
+        const nobleId: string = payload?.nobleId;
+        if (!nobleId) return;
+        socket.emit('game:chooseNoble', roomCode, nobleId);
+        break;
+      }
+      default:
+        break;
+    }
+  };
+
+  // ------------------------------------------------------------------------
+  // LOCAL UI LOGIC
+  // ------------------------------------------------------------------------
   const showToast = (message: string, type: 'error' | 'success' = 'error') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 6000);
   };
 
-  const handleAction = (actionFn: () => void) => {
-    try {
-      actionFn();
-      setSelectedTokens([]);
-      setDiscardSelection([]);
-    } catch (e) {
-      if (e instanceof GameError) showToast(e.message);
-    }
-  };
-
   const toggleTokenSelection = (color: GemColor) => {
     if (color === GemColor.Gold) return;
-    const count = selectedTokens.filter(c => c === color).length;
+    const count = selectedTokens.filter((c) => c === color).length;
     if (count >= 2) return;
     setSelectedTokens([...selectedTokens, color]);
   };
@@ -75,25 +260,77 @@ export default function App() {
   const toggleDiscardSelection = (color: GemColor) => {
     if (!gameState) return;
     const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-    const currentCount = discardSelection.filter(c => c === color).length;
-    if (currentCount < currentPlayer.ownedTokens[color]) {
+    const currentCount = discardSelection.filter((c) => c === color).length;
+    
+    // Allow un-selecting a token if it's already in the discard list
+    if (currentCount > 0) {
+      const indexToRemove = discardSelection.indexOf(color);
+      const newSelection = [...discardSelection];
+      newSelection.splice(indexToRemove, 1);
+      setDiscardSelection(newSelection);
+    } 
+    // Otherwise add it if we have enough of that token
+    else if (currentCount < currentPlayer.ownedTokens[color]) {
       setDiscardSelection([...discardSelection, color]);
     }
   };
 
-  if (!gameState) {
+  const getTotalTokens = (player: any) => {
+    return Object.values(player.ownedTokens).reduce((a: any, b: any) => a + b, 0) as number;
+  };
+
+  // ------------------------------------------------------------------------
+  // RENDER: AUTH / SETUP / LOBBY / GAME
+  // ------------------------------------------------------------------------
+  const isDark = theme === 'dark';
+
+  // 1. Show AuthScreen if user is not authenticated yet
+  if (!isAuthenticated) {
     return (
-      <GameSetup 
-        onStart={handleStartGame} 
-        theme={theme} 
-        onThemeToggle={() => setTheme(theme === 'dark' ? 'light' : 'dark')} 
+      <AuthScreen
+        onLogin={handleLogin}
+        onPlayGuest={handlePlayGuest}
+        theme={theme}
+        onThemeToggle={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
       />
     );
   }
 
-  const isDark = theme === 'dark';
+  // 2. Show GameSetup if not in a room yet
+  if (!roomCode) {
+    return (
+      <GameSetup
+        onCreateRoom={handleCreateRoom}
+        onJoinRoom={handleJoinRoom}
+        theme={theme}
+        onThemeToggle={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+      />
+    );
+  }
+
+  // 3. Show Lobby if in a room but game hasn't started
+  if (!gameState) {
+    return (
+      <Lobby
+        roomCode={roomCode}
+        // تبدیل لیست نام‌ها به ساختار مورد نیاز کامپوننت لابی
+        players={lobbyPlayers.map((name, index) => ({
+          id: `player-${index}`,
+          name: name,
+          isHost: index === 0 // معمولاً اولین نفر در آرایه سوکت هاست است
+        }))}
+        isHost={isHost}
+        onStartGame={handleStartGame}
+        onLeaveRoom={handleLeaveRoom}
+        theme={theme}
+      />
+    );
+  }
+
+  // 4. Show Main Game if game state exists
   const players = gameState.players;
   const currentPlayer = players[gameState.currentPlayerIndex];
+  const isLocalTurn = currentPlayer.name === localPlayerName;
 
   return (
     <div
@@ -112,7 +349,7 @@ export default function App() {
             transition={{ type: "spring", stiffness: 400, damping: 25 }}
             className={`
               fixed top-4 left-1/2 -translate-x-1/2 z-[999] items-center
-              w-[90%] lg:w-[50%] px-4 py-2.5 justify-center rounded-lg shadow-2xl font-bold font-sans flex gap-2  border-2 
+              w-[90%] lg:w-[50%] px-4 py-2.5 justify-center rounded-lg shadow-2xl font-bold font-sans flex gap-2 border-2 
               ${toast.type === "error" ? "bg-red-600 border-red-400 text-white" : "bg-emerald-600 border-emerald-400 text-white"}
               `}
           >
@@ -141,7 +378,7 @@ export default function App() {
           />
         )}
 
-        {gameState.turnPhase === "ChooseNoble" && (
+        {gameState.turnPhase === "ChooseNoble" && isLocalTurn && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -168,11 +405,7 @@ export default function App() {
                     <NobleTile
                       noble={noble}
                       isSelectable={true}
-                      onClick={() =>
-                        handleAction(() =>
-                          setGameState(chooseNoble(gameState, noble.id)),
-                        )
-                      }
+                      onClick={() => emitAction('CHOOSE_NOBLE', { nobleId: noble.id })}
                     />
                   </div>
                 ))}
@@ -181,7 +414,7 @@ export default function App() {
           </motion.div>
         )}
 
-        {gameState.turnPhase === "DiscardTokens" && (
+        {gameState.turnPhase === "DiscardTokens" && isLocalTurn && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -244,11 +477,7 @@ export default function App() {
                   Reset Selection
                 </button>
                 <button
-                  onClick={() =>
-                    handleAction(() =>
-                      setGameState(discardTokens(gameState, discardSelection)),
-                    )
-                  }
+                  onClick={() => emitAction('DISCARD_TOKENS', { tokens: discardSelection })}
                   disabled={
                     discardSelection.length !==
                     getTotalTokens(currentPlayer) - 10
@@ -281,7 +510,7 @@ export default function App() {
               >
                 Turn:{" "}
                 <span className="font-bold text-amber-500">
-                  {currentPlayer.name}
+                  {currentPlayer.name} {isLocalTurn ? "(You)" : ""}
                 </span>
                 {gameState.isLastRound && (
                   <span className="ml-2 sm:ml-3 text-red-500 font-bold animate-pulse font-sans text-[10px] sm:text-xs uppercase tracking-wider">
@@ -296,9 +525,13 @@ export default function App() {
 
       {/* Header */}
       <div className="max-w-7xl mx-auto w-full flex flex-row justify-between items-center mb-4 lg:mb-6 gap-2 sm:gap-3 shrink-0 min-w-0">
-        <h1 className="text-2xl sm:text-4xl font-bold text-amber-500 tracking-wider uppercase drop-shadow-lg font-serif whitespace-nowrap">
-          Splendor
-        </h1>
+        <div className="flex flex-col">
+          <h1 className="text-2xl sm:text-4xl font-bold text-amber-500 tracking-wider uppercase drop-shadow-lg font-serif whitespace-nowrap">
+            Splendor
+          </h1>
+          <span className="text-xs text-stone-400 font-mono">Room: {roomCode}</span>
+        </div>
+        
         <div className="flex items-center gap-2 sm:gap-6 flex-nowrap shrink-0">
           <button
             onClick={() => setShowRules(true)}
@@ -315,35 +548,24 @@ export default function App() {
         </div>
       </div>
 
-      {/* Main Layout Container - Reduced gap for mobile (gap-2) */}
+      {/* Main Layout Container */}
       <div className="max-w-7xl mx-auto w-full flex flex-col lg:flex-row gap-2 lg:gap-4 flex-1 min-h-0 items-stretch">
+        
         {/* Players Sidebar Wrapper (Left) */}
         <div className="order-2 lg:order-none lg:w-1/3 flex flex-col gap-1 w-full">
-          
-          {/* Mobile Horizontal Indicator */}
-          <div
-            className={`lg:hidden flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-wider opacity-70 animate-pulse ${isDark ? "text-zinc-400" : "text-gray-500"}`}
-          >
+          <div className={`lg:hidden flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-wider opacity-70 animate-pulse ${isDark ? "text-zinc-400" : "text-gray-500"}`}>
             <span>⟵</span>
             <span>Swipe to see players</span>
             <span>⟶</span>
           </div>
 
-          {/* Wrapper for Desktop Indicator and Scroll Container */}
           <div className="flex flex-col lg:flex-row w-full gap-1 lg:gap-2 h-full">
-            
-            {/* Desktop Vertical Indicator (Left Side) */}
-            <div
-              className={`hidden lg:flex flex-col items-center justify-center gap-4 text-xs font-semibold uppercase tracking-wider opacity-70 animate-pulse select-none px-1 ${isDark ? "text-zinc-400" : "text-gray-500"}`}
-            >
+            <div className={`hidden lg:flex flex-col items-center justify-center gap-4 text-xs font-semibold uppercase tracking-wider opacity-70 animate-pulse select-none px-1 ${isDark ? "text-zinc-400" : "text-gray-500"}`}>
               <span>↑</span>
-              <span className="[writing-mode:vertical-rl] rotate-180">
-                Scroll to see players
-              </span>
+              <span className="[writing-mode:vertical-rl] rotate-180">Scroll to see players</span>
               <span>↓</span>
             </div>
 
-            {/* Scrollable Container */}
             <div
               ref={scrollContainerRef}
               className="flex-1 flex flex-row lg:flex-col gap-3 lg:gap-4 overflow-x-auto lg:overflow-x-hidden lg:overflow-y-auto max-h-none lg:max-h-screen py-4 px-1 lg:py-5 lg:px-1 snap-x snap-mandatory hide-scrollbar"
@@ -357,18 +579,16 @@ export default function App() {
                   <PlayerDashboard
                     player={player}
                     isActive={gameState.currentPlayerIndex === idx}
-                    isCurrentPlayer={gameState.currentPlayerIndex === idx}
+                    isCurrentPlayer={player.name === localPlayerName}
                     turnPhase={gameState.turnPhase}
-                    onBuyReserved={(cardId) => handleAction(() => setGameState(purchaseCard(gameState, cardId)))}
+                    onBuyReserved={(cardId) => emitAction('PURCHASE_CARD', { cardId })}
                     theme={theme}
                   />
                 </div>
               ))}
             </div>
-            
           </div>
         </div>
-
 
         {/* Main Board (Right) */}
         <div className="w-full lg:flex-1 order-1 lg:order-none">
@@ -377,11 +597,11 @@ export default function App() {
             currentPlayer={currentPlayer}
             selectedTokens={selectedTokens}
             onTokenClick={toggleTokenSelection}
-            onTakeTokens={() =>handleAction(() => setGameState(takeTokens(gameState, selectedTokens)))}
+            onTakeTokens={() => emitAction('TAKE_TOKENS', { tokens: selectedTokens })}
             onClearTokens={() => setSelectedTokens([])}
-            onBuyCard={(id) =>handleAction(() => setGameState(purchaseCard(gameState, id)))}
-            onReserveCard={(id) =>handleAction(() => setGameState(reserveCard(gameState, id)))}
-            onReserveFromDeck={(level) =>handleAction(() => setGameState(reserveCardFromDeck(gameState, level)),)}
+            onBuyCard={(id) => emitAction('PURCHASE_CARD', { cardId: id })}
+            onReserveCard={(id) => emitAction('RESERVE_CARD', { cardId: id })}
+            onReserveFromDeck={(level) => emitAction('RESERVE_FROM_DECK', { level })}
             isDark={isDark}
           />
         </div>

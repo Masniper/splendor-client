@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GemColor, GameState } from './game/models';
 import { gemStyles } from './constants';
-import { socket } from './network/socket';
+import { useOnlineGame } from './hooks/useOnlineGame';
 
 // Components
 import { AuthScreen } from './components/AuthScreen';
@@ -19,14 +19,9 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authToken, setAuthToken] = useState<string | null>(null);
 
-  // Network & Room States
-  const [roomCode, setRoomCode] = useState<string | null>(null);
   const [localPlayerName, setLocalPlayerName] = useState<string>('');
-  const [lobbyPlayers, setLobbyPlayers] = useState<string[]>([]);
-  const [isHost, setIsHost] = useState(false);
 
   // Game States
-  const [gameState, setGameState] = useState<GameState | null>(null);
   const [selectedTokens, setSelectedTokens] = useState<GemColor[]>([]);
   const [discardSelection, setDiscardSelection] = useState<GemColor[]>([]);
   const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
@@ -39,68 +34,29 @@ export default function App() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const playerRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-  // ------------------------------------------------------------------------
-  // SOCKET LISTENERS
-  // ------------------------------------------------------------------------
+  const showToast = (message: string, type: 'error' | 'success' = 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 6000);
+  };
+
+  const {
+    room: { roomCode, lobbyPlayers, isHost },
+    gameState,
+    actions,
+  } = useOnlineGame({
+    authToken,
+    localPlayerName,
+    onLocalPlayerName: setLocalPlayerName,
+    onToast: ({ message, type }) => showToast(message, type),
+  });
+
+  // Reset local selections when state updates to avoid stale data
   useEffect(() => {
-    // مطابق پروتکل جدید بک‌اند (room.handler.ts و game.handler.ts)
-    const handleRoomCreated = (data: { roomId: string; room: any }) => {
-      setRoomCode(data.roomId);
-      setIsHost(true);
-      setLobbyPlayers(
-        (data.room.players || []).map(
-          (p: any, index: number) => p.username || `Player ${index + 1}`,
-        ),
-      );
-    };
-
-    const handleRoomUpdated = (data: { room: any }) => {
-      const room = data.room;
-      if (!room) return;
-
-      setLobbyPlayers(
-        (room.players || []).map(
-          (p: any, index: number) => p.username || `Player ${index + 1}`,
-        ),
-      );
-
-      // اگر کاربر تازه جوین کرده و هنوز roomCode ست نشده است
-      setRoomCode((prev) => prev ?? room.id);
-    };
-
-    const handleGameUpdated = (payload: { gameState: GameState }) => {
-      const newState = payload.gameState;
-      setGameState(newState);
+    if (gameState) {
       setSelectedTokens([]);
       setDiscardSelection([]);
-    };
-
-    const handleGameStarted = (payload: { gameState: GameState }) => {
-      const newState = payload.gameState;
-      setGameState(newState);
-      setSelectedTokens([]);
-      setDiscardSelection([]);
-    };
-
-    const handleGameError = (data: { message: string }) => {
-      showToast(data.message, 'error');
-    };
-
-    socket.on('room:created', handleRoomCreated);
-    socket.on('room:updated', handleRoomUpdated);
-    socket.on('game:updated', handleGameUpdated);
-    socket.on('game:started', handleGameStarted);
-    socket.on('game:error', handleGameError);
-
-    // Cleanup listeners on unmount
-    return () => {
-      socket.off('room:created', handleRoomCreated);
-      socket.off('room:updated', handleRoomUpdated);
-      socket.off('game:updated', handleGameUpdated);
-      socket.off('game:started', handleGameStarted);
-      socket.off('game:error', handleGameError);
-    };
-  }, []);
+    }
+  }, [gameState]);
 
   // Auto-scroll to current player when turn changes
   useEffect(() => {
@@ -128,126 +84,6 @@ export default function App() {
   const handlePlayGuest = (guestName: string) => {
     setLocalPlayerName(guestName);
     setIsAuthenticated(true);
-  };
-
-  // ------------------------------------------------------------------------
-  // NETWORK ACTIONS
-  // ------------------------------------------------------------------------
-  const setupSocketConnection = (displayName?: string) => {
-    const usernameForSocket = displayName || localPlayerName || undefined;
-
-    if (authToken) {
-      socket.auth = { token: authToken, username: usernameForSocket };
-    } else {
-      // در حالت مهمان، فقط نام نمایشی را می‌فرستیم (توکن از /auth/guest می‌آید)
-      socket.auth = { token: 'guest_mode', username: usernameForSocket }; 
-    }
-    if (!socket.connected) {
-      socket.connect();
-    }
-  };
-
-  const handleCreateRoom = (nameFromSetup: string) => {
-    const finalName = localPlayerName || nameFromSetup;
-    setLocalPlayerName(finalName);
-    setupSocketConnection(finalName);
-    // ایجاد روم مطابق بک‌اند: room.handler.ts → 'room:create'
-    socket.emit('room:create');
-  };
-
-  const handleJoinRoom = (nameFromSetup: string, code: string) => {
-    const finalName = localPlayerName || nameFromSetup;
-    setLocalPlayerName(finalName);
-    setupSocketConnection(finalName);
-    // جوین روم مطابق بک‌اند: 'room:join' با roomId به‌صورت string
-    socket.emit('room:join', code.toUpperCase());
-  };
-
-  const handleLeaveRoom = () => {
-    if (roomCode) {
-      socket.emit('leaveRoom', { roomCode });
-    }
-    setRoomCode(null);
-    setLobbyPlayers([]);
-    setIsHost(false);
-    setGameState(null);
-  };
-
-  const handleStartGame = () => {
-    if (roomCode) {
-      // شروع بازی مطابق بک‌اند: room.handler.ts → 'room:start'
-      socket.emit('room:start', roomCode);
-    }
-  };
-
-  const handleRestart = () => {
-    if (roomCode) {
-      socket.emit('restartGame', { roomCode });
-    }
-  };
-
-  // Generalized function to emit player actions to the server
-  const emitAction = (actionType: string, payload?: any) => {
-    if (!gameState || !roomCode) return;
-    
-    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-    
-    // Client-side validation to prevent sending actions if it's not their turn
-    if (currentPlayer.name !== localPlayerName) {
-      showToast("It's not your turn!", 'error');
-      return;
-    }
-
-    // تمام اکشن‌ها از بک‌اند هندل می‌شوند؛
-    // فقط نوع اکشن را به ایونت‌های game.handler.ts مپ می‌کنیم.
-    switch (actionType) {
-      case 'TAKE_TOKENS': {
-        const tokens: GemColor[] = payload?.tokens || [];
-        socket.emit('game:takeTokens', roomCode, tokens);
-        break;
-      }
-      case 'PURCHASE_CARD': {
-        const cardId: string = payload?.cardId;
-        if (!cardId) return;
-        socket.emit('game:purchaseCard', roomCode, cardId);
-        break;
-      }
-      case 'RESERVE_CARD': {
-        const cardId: string = payload?.cardId;
-        if (!cardId) return;
-        socket.emit('game:reserveCard', roomCode, cardId);
-        break;
-      }
-      case 'RESERVE_FROM_DECK': {
-        const level: 1 | 2 | 3 = payload?.level;
-        if (!level) return;
-        // در بک‌اند فقط reserveCardFromBoard داریم؛
-        // اگر بعداً ایونت مخصوص دِک اضافه شد، این‌جا آپدیت می‌شود.
-        socket.emit('game:reserveFromDeck', roomCode, level);
-        break;
-      }
-      case 'DISCARD_TOKENS': {
-        const tokens: GemColor[] = payload?.tokens || [];
-        socket.emit('game:discardTokens', roomCode, tokens);
-        break;
-      }
-      case 'CHOOSE_NOBLE': {
-        const nobleId: string = payload?.nobleId;
-        if (!nobleId) return;
-        socket.emit('game:chooseNoble', roomCode, nobleId);
-        break;
-      }
-      default:
-        break;
-    }
-  };
-
-  // ------------------------------------------------------------------------
-  // LOCAL UI LOGIC
-  // ------------------------------------------------------------------------
-  const showToast = (message: string, type: 'error' | 'success' = 'error') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 6000);
   };
 
   const toggleTokenSelection = (color: GemColor) => {
@@ -300,8 +136,8 @@ export default function App() {
   if (!roomCode) {
     return (
       <GameSetup
-        onCreateRoom={handleCreateRoom}
-        onJoinRoom={handleJoinRoom}
+        onCreateRoom={actions.createRoom}
+        onJoinRoom={actions.joinRoom}
         theme={theme}
         onThemeToggle={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
       />
@@ -320,8 +156,8 @@ export default function App() {
           isHost: index === 0 // معمولاً اولین نفر در آرایه سوکت هاست است
         }))}
         isHost={isHost}
-        onStartGame={handleStartGame}
-        onLeaveRoom={handleLeaveRoom}
+        onStartGame={actions.startGame}
+        onLeaveRoom={actions.leaveRoom}
         theme={theme}
       />
     );
@@ -373,7 +209,7 @@ export default function App() {
           <GameOverModal
             players={gameState.players}
             winner={gameState.winner}
-            onRestart={handleRestart}
+            onRestart={actions.restartGame}
             isDark={isDark}
           />
         )}
@@ -405,7 +241,7 @@ export default function App() {
                     <NobleTile
                       noble={noble}
                       isSelectable={true}
-                      onClick={() => emitAction('CHOOSE_NOBLE', { nobleId: noble.id })}
+                      onClick={() => actions.sendAction({ type: 'CHOOSE_NOBLE', payload: { nobleId: noble.id } })}
                     />
                   </div>
                 ))}
@@ -477,7 +313,7 @@ export default function App() {
                   Reset Selection
                 </button>
                 <button
-                  onClick={() => emitAction('DISCARD_TOKENS', { tokens: discardSelection })}
+                  onClick={() => actions.sendAction({ type: 'DISCARD_TOKENS', payload: { tokens: discardSelection } })}
                   disabled={
                     discardSelection.length !==
                     getTotalTokens(currentPlayer) - 10
@@ -581,7 +417,7 @@ export default function App() {
                     isActive={gameState.currentPlayerIndex === idx}
                     isCurrentPlayer={player.name === localPlayerName}
                     turnPhase={gameState.turnPhase}
-                    onBuyReserved={(cardId) => emitAction('PURCHASE_CARD', { cardId })}
+                    onBuyReserved={(cardId) => actions.sendAction({ type: 'PURCHASE_CARD', payload: { cardId } })}
                     theme={theme}
                   />
                 </div>
@@ -597,11 +433,11 @@ export default function App() {
             currentPlayer={currentPlayer}
             selectedTokens={selectedTokens}
             onTokenClick={toggleTokenSelection}
-            onTakeTokens={() => emitAction('TAKE_TOKENS', { tokens: selectedTokens })}
+            onTakeTokens={() => actions.sendAction({ type: 'TAKE_TOKENS', payload: { tokens: selectedTokens } })}
             onClearTokens={() => setSelectedTokens([])}
-            onBuyCard={(id) => emitAction('PURCHASE_CARD', { cardId: id })}
-            onReserveCard={(id) => emitAction('RESERVE_CARD', { cardId: id })}
-            onReserveFromDeck={(level) => emitAction('RESERVE_FROM_DECK', { level })}
+            onBuyCard={(id) => actions.sendAction({ type: 'PURCHASE_CARD', payload: { cardId: id } })}
+            onReserveCard={(id) => actions.sendAction({ type: 'RESERVE_CARD', payload: { cardId: id } })}
+            onReserveFromDeck={(level) => actions.sendAction({ type: 'RESERVE_FROM_DECK', payload: { level } })}
             isDark={isDark}
           />
         </div>

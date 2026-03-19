@@ -2,7 +2,7 @@ import { GameState, GemColor, Player } from '../game/models';
 import { NobleTile } from './NobleTile';
 import { DevelopmentCard, Deck } from './DevelopmentCard';
 import { TokenBank } from './TokenBank';
-import { canAffordCard } from '../game/actions';
+import { canAffordCard } from '../utils/gameView';
 
 interface CenterBoardProps {
   gameState: GameState;

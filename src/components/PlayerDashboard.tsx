@@ -1,6 +1,6 @@
 import { Player, GemColor, TurnPhase } from '../game/models';
 import { gemStylesBank, gemIconSrc } from '../constants';
-import { getTotalTokens, canAffordCard } from '../game/actions';
+import { getTotalTokens, canAffordCard } from '../utils/gameView';
 import { DevelopmentCard } from './DevelopmentCard';
 import { NobleTile } from './NobleTile';
 

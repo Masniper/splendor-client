@@ -16,6 +16,9 @@ interface GameSetupProps {
   }>;
   onListPublicRooms?: () => void;
   onJoinPublicRoom?: (roomId: string) => void;
+  currentUsername?: string;
+  currentUserAvatarUrl?: string | null;
+  onOpenProfile?: () => void;
 }
 
 export const GameSetup = ({ 
@@ -27,11 +30,15 @@ export const GameSetup = ({
   onLogout,
   publicRooms = [],
   onListPublicRooms = () => {},
-  onJoinPublicRoom = () => {}
+  onJoinPublicRoom = () => {},
+  currentUsername = "User",
+  currentUserAvatarUrl = null,
+  onOpenProfile,
 }: GameSetupProps) => {
   const [roomCode, setRoomCode] = useState<string>('');
   const [isPublic, setIsPublic] = useState<boolean>(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   
   const isDark = theme === 'dark';
 
@@ -84,6 +91,7 @@ export const GameSetup = ({
 
   // فیلتر کردن اتاق‌های بسته شده
   const activePublicRooms = publicRooms.filter(room => room.status !== 'finished');
+  const avatarInitial = currentUsername.trim().charAt(0).toUpperCase() || "U";
 
   return (
     <div
@@ -93,23 +101,74 @@ export const GameSetup = ({
       }}
     >
       <div className="absolute top-4 right-4 z-50">
-         <div className="flex items-center gap-2">
-           {onLogout && (
-             <button
-               onClick={onLogout}
-               className={`px-3 py-2 rounded-lg transition-colors shadow-md font-bold ${
-                 isDark
-                   ? 'bg-zinc-800 text-red-300 hover:bg-zinc-700 border border-zinc-700'
-                   : 'bg-gray-100 text-red-600 hover:bg-gray-200 border border-gray-200'
-               }`}
-             >
-               Logout
-             </button>
-           )}
-           <button onClick={onThemeToggle} className={`p-2 rounded-lg transition-colors shadow-md ${isDark ? 'bg-zinc-800 text-amber-400 hover:bg-zinc-700' : 'bg-gray-100 text-amber-600 hover:bg-gray-200'}`}>
-              {theme === 'dark' ? '☀️' : '🌙'}
-           </button>
-         </div>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowUserMenu((prev) => !prev)}
+              className={`flex items-center gap-2 rounded-full pl-1 pr-3 py-1.5 shadow-md border transition-colors ${
+                isDark
+                  ? "bg-zinc-800 border-zinc-700 hover:bg-zinc-700 text-stone-200"
+                  : "bg-gray-100 border-gray-200 hover:bg-gray-200 text-gray-700"
+              }`}
+            >
+              <div className="h-8 w-8 overflow-hidden rounded-full border border-amber-500/60 bg-zinc-700/40">
+                {currentUserAvatarUrl ? (
+                  <img
+                    src={currentUserAvatarUrl}
+                    alt="User avatar"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-xs font-bold text-white">
+                    {avatarInitial}
+                  </div>
+                )}
+              </div>
+              <span className="max-w-[120px] truncate text-sm font-semibold">
+                {currentUsername}
+              </span>
+            </button>
+
+            {showUserMenu && (
+              <div
+                className={`absolute right-0 mt-2 min-w-[180px] rounded-xl border shadow-xl p-1 ${
+                  isDark ? "bg-zinc-900 border-zinc-700" : "bg-white border-gray-200"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    onOpenProfile?.();
+                  }}
+                  className={`w-full rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors ${
+                    isDark ? "hover:bg-zinc-800 text-stone-200" : "hover:bg-gray-100 text-gray-700"
+                  }`}
+                >
+                  Profile
+                </button>
+                {onLogout && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      onLogout();
+                    }}
+                    className={`w-full rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors ${
+                      isDark ? "hover:bg-zinc-800 text-red-300" : "hover:bg-gray-100 text-red-600"
+                    }`}
+                  >
+                    Logout
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+          <button onClick={onThemeToggle} className={`p-2 rounded-lg transition-colors shadow-md ${isDark ? 'bg-zinc-800 text-amber-400 hover:bg-zinc-700' : 'bg-gray-100 text-amber-600 hover:bg-gray-200'}`}>
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
+        </div>
       </div>
 
       <div

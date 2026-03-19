@@ -20,6 +20,9 @@ type SetupPageProps = {
   onJoinPublicRoom: (roomId: string) => void;
 
   onLogout: () => void;
+  currentUsername: string;
+  currentUserAvatarUrl?: string | null;
+  onOpenProfile: () => void;
 };
 
 export function SetupPage(props: SetupPageProps) {
@@ -33,6 +36,9 @@ export function SetupPage(props: SetupPageProps) {
     onJoinRoom,
     onJoinPublicRoom,
     onLogout,
+    currentUsername,
+    currentUserAvatarUrl,
+    onOpenProfile,
   } = props;
 
   return (
@@ -46,6 +52,9 @@ export function SetupPage(props: SetupPageProps) {
       onJoinRoom={onJoinRoom}
       onJoinPublicRoom={onJoinPublicRoom}
       onLogout={onLogout}
+      currentUsername={currentUsername}
+      currentUserAvatarUrl={currentUserAvatarUrl}
+      onOpenProfile={onOpenProfile}
     />
   );
 }

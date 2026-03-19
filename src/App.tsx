@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { GemColor } from './game/models';
 import { useOnlineGame } from './hooks/useOnlineGame';
+import { useUserProfile } from './hooks/useUserProfile';
 import { socket } from './network/socket';
 
 type PendingDiscardAction =
@@ -12,6 +13,7 @@ import { AuthScreen } from './components/AuthScreen';
 import { SetupPage } from './pages/SetupPage';
 import { LobbyPage } from './pages/LobbyPage';
 import { GamePage } from './pages/GamePage';
+import { UserProfile } from './components/UserProfile';
 
 const STORAGE_AUTH_TOKEN = 'splendor:authToken';
 const STORAGE_USERNAME = 'splendor:username';
@@ -45,6 +47,7 @@ export default function App() {
   
   // UI States
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+  const [showProfilePage, setShowProfilePage] = useState(false);
 
   const showToast = (message: string, type: 'error' | 'success' = 'error') => {
     setToast({ message, type });
@@ -66,6 +69,8 @@ export default function App() {
     onLocalPlayerName: setLocalPlayerName,
     onToast: ({ message, type }) => showToast(message, type),
   });
+
+  const { profile } = useUserProfile(authToken);
 
   // Handle socket disconnection and show reconnect modal
   useEffect(() => {
@@ -130,6 +135,7 @@ export default function App() {
     setAuthToken(token);
     setLocalPlayerName(username);
     setIsAuthenticated(true);
+    setShowProfilePage(false);
 
     window.localStorage.setItem(STORAGE_AUTH_TOKEN, token);
     window.localStorage.setItem(STORAGE_USERNAME, username);
@@ -151,6 +157,7 @@ export default function App() {
 
     setIsAuthenticated(false);
     setAuthToken(null);
+    setShowProfilePage(false);
 
     window.localStorage.removeItem(STORAGE_AUTH_TOKEN);
     window.localStorage.removeItem(STORAGE_USERNAME);
@@ -198,6 +205,17 @@ export default function App() {
     );
   }
 
+  if (!roomCode && showProfilePage) {
+    return (
+      <UserProfile
+        authToken={authToken}
+        theme={theme}
+        onBack={() => setShowProfilePage(false)}
+        onLogout={() => handleLogout({ keepReconnectRoom: false, leaveRoom: true })}
+      />
+    );
+  }
+
   if (!roomCode) {
     return (
       <SetupPage
@@ -210,6 +228,9 @@ export default function App() {
         onJoinRoom={actions.joinRoom}
         onJoinPublicRoom={(roomId) => actions.joinRoom('', roomId)}
         onLogout={() => handleLogout({ keepReconnectRoom: false, leaveRoom: true })}
+        currentUsername={profile?.username || localPlayerName || 'User'}
+        currentUserAvatarUrl={profile?.profile_picture || null}
+        onOpenProfile={() => setShowProfilePage(true)}
       />
     );
   }

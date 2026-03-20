@@ -1,123 +1,130 @@
-# Splendor App (Client-only)
+# Splendor — Frontend (React + Vite)
 
-![Cover](./public/images/startup-bg.jpg)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-06B6D4?logo=tailwindcss&logoColor=white)
+![License](https://img.shields.io/badge/license-Private-red)
 
-A modern React + TypeScript implementation of **Splendor** (board game) built with **Vite**.
+Browser client for **Splendor Online**: auth, lobby, public rooms, live multiplayer via **Socket.io**, and a responsive board UI built with **React 19**, **Vite**, and **Tailwind CSS v4**.
 
-## About
+---
 
-- **Players**: 2–4
-- **Mode**: Offline, local (hot-seat)
-- **Roadmap**: Online multiplayer planned for the future
+## Features
 
-## Board game reference
+- **Authentication** — Login, register, play as guest; token stored locally
+- **Setup** — Create/join room by code, browse **public rooms**, theme toggle, balance & avatar header
+- **Profile** — View/edit member profile, guest upgrade with server-side rewards
+- **Lobby & game** — Real-time players, start match, full in-game actions (tokens, cards, nobles, reserve)
+- **Social** — Leaderboard modal, optional opponent profile from avatars
+- **Game over** — Winner/loser summaries with account stats when the server settles bets
+- **Responsiveness** — Layout tuned for desktop, tablet, and mobile (setup & modals)
 
-- [Splendor on BoardGameGeek](https://boardgamegeek.com/boardgame/148228/splendor)
-
-## Screenshots
-
-All screenshots live in `./docs/screenshots/`.
-
-### Desktop (startup)
-
-![Desktop Startup 1](./docs/screenshots/desktop-startup1-screen-shot.webp)
-
-![Desktop Startup 2](./docs/screenshots/desktop-startup2-screen-shot.webp)
-
-### Desktop (in game)
-
-![Desktop In-Game](./docs/screenshots/desktop-screen-shot.webp)
-
-### Tablet
-
-![Tablet Screenshot](./docs/screenshots/tablet-screen-shot.webp)
-
-### Mobile
-
-![Mobile Screenshot](./docs/screenshots/mobile-screen-shot.webp)
+---
 
 ## Tech Stack
 
-- React
-- TypeScript
-- Vite
-- Tailwind CSS
-- Framer Motion
+| Layer | Technologies |
+|--------|----------------|
+| **UI** | React 19, React DOM |
+| **Build** | Vite 6, `@vitejs/plugin-react` |
+| **Styling** | Tailwind CSS v4, `@tailwindcss/vite` |
+| **Motion** | Framer Motion |
+| **Icons** | Lucide React |
+| **Routing** | React Router DOM |
+| **Realtime** | Socket.io client |
+| **Language** | TypeScript |
 
-## Project structure
+---
 
-- `src/App.tsx`: Main UI + turn flow + modals
-- `src/components/*`: UI components (board, cards, tokens, dashboards, modals)
-- `src/game/*`: Game rules/state (setup, actions, models, data)
-- `public/images/*`: Background images used in UI
+## Prerequisites
 
-## Game rules (quick)
+- **Node.js** ≥ 18
+- **Backend** — API + Socket.io server running (default [`http://localhost:5001`](http://localhost:5001)); see [back-end README](../back-end/README.md)
 
-- **Win condition**: Reach **15 Prestige Points**. After someone reaches 15, the round finishes so everyone has equal turns; highest score wins (tiebreaker: fewer purchased cards).
-- **One action per turn**:
-  - Take **3 different** gem tokens
-  - Take **2 same-color** tokens (only if that color has **≥ 4** in the bank)
-  - **Reserve** a card (board or top of a deck) and take **1 Gold Joker** if available (max 3 reserved)
-  - **Purchase** a card (from board or reserved), using tokens + permanent bonuses (Gold can cover missing cost)
-- **Token limit**: If you end your action with more than **10 tokens**, you must discard down to 10.
-- **Nobles**: At end of turn, if your permanent bonuses satisfy a noble, it visits you (worth 3 points). If multiple nobles are eligible, you choose one.
+---
 
-## Local Development
-
-### Prerequisites
-
-- Node.js (LTS recommended)
-
-### Environment variables
-
-No environment variables are required to run the client.
-
-### Install
+## Installation & Local Setup
 
 ```bash
+cd front-end
 npm install
-```
-
-### Run
-
-```bash
 npm run dev
 ```
 
-This starts Vite on:
-
-- **URL**: `http://localhost:3000`
-- **Host binding**: `0.0.0.0` (useful for LAN/mobile testing)
-
-### Build
+The dev server binds to **`http://localhost:3000`** (all interfaces: `0.0.0.0`).
 
 ```bash
+# Typecheck (no emit)
+npm run lint
+
+# Production build
 npm run build
-```
 
-### Preview production build
-
-```bash
+# Preview production build
 npm run preview
 ```
 
-### Typecheck (lint)
+---
 
-```bash
-npm run lint
+## Environment variables
+
+The bundled `.env.example` states that **no variables are required** for default local development.
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| *(none)* | — | API and Socket URLs are currently **hardcoded** to `http://localhost:5001` in source (see below) |
+
+**Deploying to another host:** update the base URLs in:
+
+- `src/network/socket.ts` — `SOCKET_URL`
+- `src/components/AuthScreen.tsx` — `API_BASE_URL`
+- `src/hooks/useUserProfile.ts`, `useLeaderboard.ts`, `useOpponentProfile.ts` — `API_BASE_URL`
+
+> A future improvement is to use `import.meta.env.VITE_API_URL` / `VITE_SOCKET_URL` and document them here.
+
+---
+
+## Project structure
+
+```
+front-end/
+├── public/                 # Static assets (e.g. background images)
+├── src/
+│   ├── components/         # UI (board, modals, setup, auth, toast, …)
+│   ├── game/               # Shared game types/models
+│   ├── hooks/              # useOnlineGame, useUserProfile, leaderboard, opponent
+│   ├── network/            # Socket.io singleton client
+│   ├── pages/              # Setup, lobby, game shells
+│   ├── utils/              # Game view helpers
+│   ├── App.tsx             # Auth → setup / lobby / game routing
+│   ├── main.tsx            # React root
+│   └── index.css           # Global styles + Tailwind
+├── index.html
+├── package.json
+├── vite.config.ts          # (or vite config as present in repo)
+└── tsconfig.json
 ```
 
-### Clean build output
+---
 
-```bash
-npm run clean
-```
+## API & realtime
 
-## Deployment
+The UI expects:
 
-This is a standard Vite app; you can deploy it to services like Vercel, Netlify, or GitHub Pages.
+- **REST** — `http://localhost:5001/api` (auth, user, leaderboard, …)
+- **WebSocket** — `http://localhost:5001` (Socket.io)
+
+OpenAPI documentation for HTTP routes: **`http://localhost:5001/api-docs`** (served by the backend).
+
+---
 
 ## License
 
-MIT. See [`LICENSE`](LICENSE).
+This package is **private** (`"private": true` in `package.json`). Add or replace with a public license if you open-source the project.
 
+---
+
+## Related
+
+- **Backend** — [back-end/README.md](../back-end/README.md) for env vars, Prisma, and running the API.

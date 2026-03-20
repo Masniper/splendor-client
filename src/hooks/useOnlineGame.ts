@@ -1,8 +1,31 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { socket } from "../network/socket";
 import { GameState, GemColor } from "../game/models";
 
 type Toast = { message: string; type: "error" | "success" };
+
+export type PublicRoomRow = {
+  id: string;
+  name: string;
+  hostName: string;
+  playerCount: number;
+  status?: string;
+  canJoin?: boolean;
+  betAmount?: number;
+  isPublic?: boolean;
+};
+
+type SocketRoomPlayer = {
+  userId: string;
+  socketId: string | null;
+  username: string;
+};
+
+type SocketRoomSnapshot = {
+  id: string;
+  players: SocketRoomPlayer[];
+  name?: string;
+};
 
 export type OnlineGameAction =
   | {
@@ -40,6 +63,27 @@ export function useOnlineGame({
   const [lobbyPlayers, setLobbyPlayers] = useState<string[]>([]);
   const [isHost, setIsHost] = useState(false);
   const [gameState, setGameState] = useState<GameState | null>(null);
+  const [gameOverInfo, setGameOverInfo] = useState<{
+    reason?: string;
+    winner?: any;
+    winnerStats?: {
+      coins: number;
+      winRate: number;
+      xp?: number;
+      wins?: number;
+      losses?: number;
+    } | null;
+    loserStats?: Array<{
+      userId: string;
+      coinsLost: number;
+      coins: number;
+      xp: number;
+      wins: number;
+      losses: number;
+      winRate: number;
+    }>;
+    finalState?: any;
+  } | null>(null);
   const [rematchState, setRematchState] = useState<{
     enabled: boolean;
     requestedBy: string[];
@@ -52,20 +96,21 @@ export function useOnlineGame({
     Record<string, { username: string; expiresAt: number; isHost?: boolean }>
   >({});
 
-  const [publicRooms, setPublicRooms] = useState<
-    Array<{
-      id: string;
-      hostName: string;
-      playerCount: number;
-      status?: string;
-      canJoin?: boolean;
-    }>
-  >([]);
+  const [publicRooms, setPublicRooms] = useState<PublicRoomRow[]>([]);
   const [isLoadingPublicRooms, setIsLoadingPublicRooms] = useState(false);
 
   const showError = useCallback(
     (message: string) => onToast({ message, type: "error" }),
     [onToast],
+  );
+
+  const showSuccess = useCallback(
+    (message: string) => onToast({ message, type: "success" }),
+    [onToast],
+  );
+
+  const publicListLoadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
   );
 
   const setupSocketConnection = useCallback(
@@ -107,22 +152,26 @@ export function useOnlineGame({
       });
     };
 
-    const handleRoomCreated = (data: { roomId: string; room: any }) => {
+    const handleRoomCreated = (data: {
+      roomId: string;
+      room: SocketRoomSnapshot;
+    }) => {
       setRoomCode(data.roomId);
       setIsHost(true);
       setLobbyPlayers(
         (data.room.players || []).map(
-          (p: any, index: number) => p.username || `Player ${index + 1}`,
+          (p, index: number) => p.username || `Player ${index + 1}`,
         ),
       );
+      showSuccess("Room created. Share the code with other players.");
     };
 
-    const handleRoomUpdated = (data: { room: any }) => {
+    const handleRoomUpdated = (data: { room: SocketRoomSnapshot | null }) => {
       const room = data.room;
       if (!room) return;
 
       setLobbyPlayers(
-        (room.players || []).map((p: any, index: number) => {
+        (room.players || []).map((p, index: number) => {
           const base = p.username || `Player ${index + 1}`;
           return p.socketId ? base : `${base} (disconnected)`;
         }),
@@ -138,31 +187,63 @@ export function useOnlineGame({
     const handleGameStarted = (payload: { gameState: GameState }) => {
       setGameState(payload.gameState);
       setRematchState(null);
+      setGameOverInfo(null);
     };
 
-    const handleGameError = (data: { message: string }) => {
-      showError(data.message);
+    const handleGameError = (data: { message?: string }) => {
+      showError(data?.message ?? "Game error.");
     };
 
-    const handleSocketError = (data: { message?: string } | any) => {
+    const handleSocketError = (data: { message?: string } | string | unknown) => {
       const message =
-        typeof data?.message === "string" ? data.message : "Connection error";
+        typeof data === "string"
+          ? data
+          : typeof data === "object" && data !== null && "message" in data
+            ? String((data as { message?: unknown }).message ?? "")
+            : "";
+      const finalMessage =
+        message.trim().length > 0 ? message : "An unexpected error occurred.";
       // Common recoverable cases: session expired, room not found, not in room.
       if (
-        /room not found/i.test(message) ||
-        /not in this room/i.test(message) ||
-        /session/i.test(message)
+        /room not found/i.test(finalMessage) ||
+        /not in this room/i.test(finalMessage) ||
+        /session/i.test(finalMessage)
       ) {
-        showError(message);
+        showError(finalMessage);
         leaveRoom(false, { clearStoredSession: true });
         return;
       }
-      showError(message);
+      showError(finalMessage);
     };
 
     const handleGameEnded = () => {
       // Game ended unexpectedly (server-side termination). Return to Setup and clear session.
+      setGameOverInfo(null);
       leaveRoom(false, { clearStoredSession: true });
+    };
+
+    const handleGameOver = (payload: {
+      reason?: string;
+      winner?: any;
+      winnerStats?: {
+        coins: number;
+        winRate: number;
+        xp?: number;
+        wins?: number;
+        losses?: number;
+      } | null;
+      loserStats?: Array<{
+        userId: string;
+        coinsLost: number;
+        coins: number;
+        xp: number;
+        wins: number;
+        losses: number;
+        winRate: number;
+      }>;
+      finalState?: any;
+    }) => {
+      setGameOverInfo(payload ?? null);
     };
 
     const handlePlayerDisconnected = (data: {
@@ -203,8 +284,9 @@ export function useOnlineGame({
     };
 
     const handlePlayerTimeout = (data: { userId: string; username: string }) => {
+      // Only the timed-out local user should leave; other players still need the GameOver UI.
+      if (data.username !== localPlayerName) return;
       showError(`${data.username} did not reconnect in time.`);
-      // After timeout, room/game are no longer valid for the disconnected user.
       leaveRoom(false, { clearStoredSession: true });
     };
 
@@ -240,11 +322,13 @@ export function useOnlineGame({
       leaveRoom(false, { clearStoredSession: true });
     };
 
-    const handleRoomTerminated = (data: {
-      reason: string;
-      message: string;
+    const handleRoomTerminated = (data?: {
+      reason?: string;
+      message?: string;
     }) => {
-      showError(data.message);
+      const msg =
+        data?.message ?? data?.reason ?? "The room was closed.";
+      showError(msg);
       leaveRoom(false);
     };
 
@@ -260,15 +344,11 @@ export function useOnlineGame({
       }
     };
 
-    const handlePublicRoomsList = (
-      rooms: Array<{
-        id: string;
-        hostName: string;
-        playerCount: number;
-        status?: string;
-        canJoin?: boolean;
-      }>,
-    ) => {
+    const handlePublicRoomsList = (rooms: PublicRoomRow[]) => {
+      if (publicListLoadTimeoutRef.current) {
+        clearTimeout(publicListLoadTimeoutRef.current);
+        publicListLoadTimeoutRef.current = null;
+      }
       setPublicRooms(rooms);
       setIsLoadingPublicRooms(false);
     };
@@ -289,9 +369,14 @@ export function useOnlineGame({
     socket.on("game:started", handleGameStarted);
     socket.on("game:error", handleGameError);
     socket.on("game:ended", handleGameEnded);
+    socket.on("game:over", handleGameOver);
     socket.on("game:rematch:update", handleRematchUpdate);
 
     return () => {
+      if (publicListLoadTimeoutRef.current) {
+        clearTimeout(publicListLoadTimeoutRef.current);
+        publicListLoadTimeoutRef.current = null;
+      }
       socket.off("connect", handleSocketConnect);
       socket.off("room:created", handleRoomCreated);
       socket.off("room:updated", handleRoomUpdated);
@@ -308,18 +393,21 @@ export function useOnlineGame({
       socket.off("game:started", handleGameStarted);
       socket.off("game:error", handleGameError);
       socket.off("game:ended", handleGameEnded);
+      socket.off("game:over", handleGameOver);
       socket.off("game:rematch:update", handleRematchUpdate);
     };
-  }, [authToken, showError, onToast]);
+  }, [authToken, showError, showSuccess, onToast, localPlayerName]);
 
   const createRoom = useCallback(
-    (nameFromSetup: string, isPublic: boolean = false) => {
-      const finalName = localPlayerName || nameFromSetup;
-      onLocalPlayerName(finalName);
-      setupSocketConnection(finalName);
-      socket.emit("room:create", isPublic);
+    (roomName: string, isPublic: boolean = true, betAmount: number = 0) => {
+      setupSocketConnection();
+      socket.emit("room:create", {
+        isPublic,
+        roomName: roomName?.trim() || undefined,
+        betAmount,
+      });
     },
-    [localPlayerName, onLocalPlayerName, setupSocketConnection],
+    [setupSocketConnection],
   );
 
   const joinRoom = useCallback(
@@ -350,6 +438,7 @@ export function useOnlineGame({
       setIsHost(false);
       setGameState(null);
       setRematchState(null);
+      setGameOverInfo(null);
       setPendingDisconnects({}); // Clear all
     },
     [roomCode, clearStoredSession],
@@ -367,9 +456,37 @@ export function useOnlineGame({
     if (!socket.connected) {
       setupSocketConnection();
     }
+    if (publicListLoadTimeoutRef.current) {
+      clearTimeout(publicListLoadTimeoutRef.current);
+    }
     setIsLoadingPublicRooms(true);
+    publicListLoadTimeoutRef.current = setTimeout(() => {
+      publicListLoadTimeoutRef.current = null;
+      setIsLoadingPublicRooms((loading) => {
+        if (loading) {
+          showError(
+            "Could not load the public room list. Check your connection.",
+          );
+        }
+        return false;
+      });
+    }, 12000);
     socket.emit("room:listPublic");
-  }, [setupSocketConnection]);
+  }, [setupSocketConnection, showError]);
+
+  useEffect(() => {
+    const onConnectError = (err: Error) => {
+      showError(
+        err?.message?.trim()
+          ? err.message
+          : "Failed to connect to the game server.",
+      );
+    };
+    socket.on("connect_error", onConnectError);
+    return () => {
+      socket.off("connect_error", onConnectError);
+    };
+  }, [showError]);
 
   const reconnectToRoom = useCallback((attemptRoomCode: string) => {
     socket.emit("room:reconnect", attemptRoomCode);
@@ -509,6 +626,7 @@ export function useOnlineGame({
   return {
     room,
     gameState,
+    gameOverInfo,
     rematchState,
     pendingDisconnect: legacyPendingDisconnect,
     pendingDisconnects: pendingDisconnectArray,

@@ -37,8 +37,11 @@ export function AuthScreen({ onLogin, onPlayGuest, theme, onThemeToggle }: AuthS
         });
         const data = await response.json();
         
-        if (response.ok && data.success) {
-          onLogin(data.token, `Guest_${data.user.id.substring(0, 4)}`); // Using onLogin to pass token even for guest
+        if (response.ok && data.success && data.data?.token && data.data?.user?.id) {
+          onLogin(
+            data.data.token,
+            `Guest_${data.data.user.id.substring(0, 4)}`,
+          );
         } else {
           setError(data.message || 'Failed to create guest session');
         }
@@ -52,8 +55,11 @@ export function AuthScreen({ onLogin, onPlayGuest, theme, onThemeToggle }: AuthS
         });
         const data = await response.json();
 
-        if (response.ok && data.token) {
-          onLogin(data.token, data.user?.username || email.split('@')[0]);
+        if (response.ok && data.data?.token) {
+          onLogin(
+            data.data.token,
+            data.data.user?.username || email.split('@')[0],
+          );
         } else {
           setError(data.message || 'Invalid credentials');
         }

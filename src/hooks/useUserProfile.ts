@@ -8,8 +8,13 @@ export interface UserProfileData {
   email?: string;
   bio?: string | null;
   profile_picture?: string | null;
+  role?: "GUEST" | "USER";
   is_guest?: boolean;
   coins?: number;
+  xp?: number;
+  wins?: number;
+  losses?: number;
+  winRate?: number;
   mmr?: number;
   created_at?: string;
 }
@@ -31,6 +36,7 @@ export function useUserProfile(authToken: string | null) {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUpgrading, setIsUpgrading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -60,7 +66,7 @@ export function useUserProfile(authToken: string | null) {
       }
 
       const data = await response.json();
-      const user: UserProfileData | undefined = data?.user;
+      const user: UserProfileData | undefined = data?.data;
       if (!user) {
         throw new Error("Invalid profile response");
       }
@@ -146,7 +152,7 @@ export function useUserProfile(authToken: string | null) {
       }
 
       const data = await response.json();
-      const updatedUser: UserProfileData | undefined = data?.user;
+      const updatedUser: UserProfileData | undefined = data?.data;
       if (!updatedUser) {
         throw new Error("Invalid update response");
       }
@@ -172,11 +178,64 @@ export function useUserProfile(authToken: string | null) {
     }
   }, [authToken, form, hasChanges, parseError]);
 
+  const upgradeGuestAccount = useCallback(
+    async (payload: { username: string; email: string; password: string }) => {
+      if (!authToken) return false;
+
+      setIsUpgrading(true);
+      setError(null);
+      setSuccessMessage(null);
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/auth/upgrade`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({
+            username: payload.username,
+            email: payload.email,
+            password: payload.password,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(await parseError(response));
+        }
+
+        const data = await response.json();
+        if (!data?.success) {
+          throw new Error(data?.message || data?.error || "Upgrade failed");
+        }
+
+        const upgradeData = data.data as { message?: string } | undefined;
+        const successMsg =
+          typeof upgradeData?.message === "string" && upgradeData.message.trim()
+            ? upgradeData.message
+            : "Account upgraded successfully.";
+
+        await fetchProfile();
+        setSuccessMessage(successMsg);
+        return true;
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Failed to upgrade account";
+        setError(message);
+        return false;
+      } finally {
+        setIsUpgrading(false);
+      }
+    },
+    [authToken, parseError, fetchProfile],
+  );
+
   return {
     profile,
     form,
     isLoading,
     isSaving,
+    isUpgrading,
     error,
     successMessage,
     hasChanges,
@@ -184,5 +243,6 @@ export function useUserProfile(authToken: string | null) {
     updateField,
     resetForm,
     saveProfile,
+    upgradeGuestAccount,
   };
 }

@@ -4,9 +4,11 @@ import { CenterBoard } from "../components/CenterBoard";
 import { GameOverModal } from "../components/GameOverModal";
 import { HowToPlayModal } from "../components/HowToPlayModal";
 import { NobleTile } from "../components/NobleTile";
+import { OpponentProfileModal } from "../components/OpponentProfileModal";
 import { PlayerDashboard } from "../components/PlayerDashboard";
 import { gemIconSrc, gemStyles, gemStylesBank } from "../constants";
 import { GameState, GemColor } from "../game/models";
+import { useOpponentProfile } from "../hooks/useOpponentProfile";
 
 type PendingDiscardAction =
   | { type: "TAKE_TOKENS"; tokens: GemColor[] }
@@ -17,8 +19,6 @@ type PendingDiscardAction =
       willReceiveGold: boolean;
     };
 
-type Toast = { message: string; type: "error" | "success" } | null;
-
 type GamePageProps = {
   theme: "light" | "dark";
   onThemeToggle: () => void;
@@ -27,18 +27,39 @@ type GamePageProps = {
   roomCode: string;
   gameState: GameState;
   rematchState: any;
+  gameOverInfo?: {
+    reason?: string;
+    winnerStats?: {
+      coins: number;
+      winRate: number;
+      xp?: number;
+      wins?: number;
+      losses?: number;
+    } | null;
+    loserStats?: Array<{
+      userId: string;
+      coinsLost: number;
+      coins: number;
+      xp: number;
+      wins: number;
+      losses: number;
+      winRate: number;
+    }>;
+  } | null;
   localPlayerName: string;
   pendingDisconnect: any;
   pendingDisconnects: any[];
 
-  toast: Toast;
   onReconnectToRoom: (roomCode: string) => void;
   onExitAfterDisconnect: () => void;
 
   actions: {
     sendAction: (action: any) => void;
     requestRematch: () => void;
-    leaveRoom: (emit?: boolean) => void;
+    leaveRoom: (
+      emit?: boolean,
+      options?: { clearStoredSession?: boolean },
+    ) => void;
   };
 };
 
@@ -50,10 +71,10 @@ export function GamePage(props: GamePageProps) {
     roomCode,
     gameState,
     rematchState,
+    gameOverInfo,
     localPlayerName,
     pendingDisconnect,
     pendingDisconnects,
-    toast,
     onReconnectToRoom,
     onExitAfterDisconnect,
     actions,
@@ -61,6 +82,14 @@ export function GamePage(props: GamePageProps) {
 
   const isDark = theme === "dark";
   const [showRules, setShowRules] = useState(false);
+  const {
+    profile: opponentProfile,
+    isOpen: isOpponentModalOpen,
+    isLoading: isOpponentLoading,
+    error: opponentError,
+    openOpponentProfile,
+    closeOpponentProfile,
+  } = useOpponentProfile();
 
   // Reconnect modal UI state stays local to game page
   const [showReconnectModal, setShowReconnectModal] = useState(false);
@@ -290,30 +319,6 @@ export function GamePage(props: GamePageProps) {
         }, ${isDark ? "rgba(0,0,0,0.22)" : "rgba(255,255,255,0.16)"}), url('/images/game-bg.jpg')`,
       }}
     >
-      {/* Toast Notification */}
-      <AnimatePresence>
-        {toast && (
-          <motion.div
-            initial={{ opacity: 0, y: -40, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -40, scale: 0.95 }}
-            transition={{ type: "spring", stiffness: 400, damping: 25 }}
-            className={`
-              fixed top-4 left-1/2 -translate-x-1/2 z-[999] items-center
-              w-[90%] lg:w-[50%] px-4 py-2.5 justify-center rounded-lg shadow-2xl font-bold font-sans flex gap-2 border-2 
-              ${toast.type === "error" ? "bg-red-600 border-red-400 text-white" : "bg-emerald-600 border-emerald-400 text-white"}
-              `}
-          >
-            <span className="text-lg sm:text-xl flex-shrink-0 drop-shadow-md">
-              {toast.type === "error" ? "⚠️" : "✅"}
-            </span>
-            <span className="text-sm sm:text-base leading-snug w-full lg:text-center sm:text-center ">
-              {toast.message}
-            </span>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Modals */}
       <AnimatePresence>
         {showReconnectModal && disconnectedRoomCode && (
@@ -425,6 +430,14 @@ export function GamePage(props: GamePageProps) {
         {showRules && (
           <HowToPlayModal isDark={isDark} onClose={() => setShowRules(false)} />
         )}
+        <OpponentProfileModal
+          isOpen={isOpponentModalOpen}
+          isLoading={isOpponentLoading}
+          error={opponentError}
+          profile={opponentProfile}
+          onClose={closeOpponentProfile}
+          theme={theme}
+        />
 
         {gameState.winner && (
           <GameOverModal
@@ -433,8 +446,13 @@ export function GamePage(props: GamePageProps) {
             localPlayerName={localPlayerName}
             rematchState={rematchState}
             onRequestRematch={actions.requestRematch}
-            onBackToMenu={() => actions.leaveRoom(true)}
+            onBackToMenu={() =>
+              actions.leaveRoom(true, { clearStoredSession: true })
+            }
             isDark={isDark}
+            reason={gameOverInfo?.reason}
+            winnerStats={gameOverInfo?.winnerStats ?? null}
+            loserStats={gameOverInfo?.loserStats ?? []}
           />
         )}
 
@@ -710,6 +728,7 @@ export function GamePage(props: GamePageProps) {
                     isActive={gameState.currentPlayerIndex === idx}
                     isCurrentPlayer={player.name === localPlayerName}
                     turnPhase={gameState.turnPhase}
+                    onAvatarClick={(playerId) => openOpponentProfile(playerId)}
                     onBuyReserved={(cardId) =>
                       actions.sendAction({
                         type: "PURCHASE_CARD",

@@ -10,12 +10,14 @@ interface PlayerDashboardProps {
   isCurrentPlayer: boolean;
   turnPhase: TurnPhase;
   onBuyReserved: (id: string) => void;
+  onAvatarClick?: (playerId: string) => void;
   theme: 'light' | 'dark';
   key?: any;
 }
 
-export const PlayerDashboard = ({ player, isActive, isCurrentPlayer, turnPhase, onBuyReserved, theme }: PlayerDashboardProps) => {
+export const PlayerDashboard = ({ player, isActive, isCurrentPlayer, turnPhase, onBuyReserved, onAvatarClick, theme }: PlayerDashboardProps) => {
   const isDark = theme === 'dark';
+  const initials = player.name.trim().charAt(0).toUpperCase() || "U";
 
   const bonusColors = [GemColor.Diamond, GemColor.Sapphire, GemColor.Emerald, GemColor.Ruby, GemColor.Onyx];
   const tokenColors = [GemColor.Diamond, GemColor.Sapphire, GemColor.Emerald, GemColor.Ruby, GemColor.Onyx, GemColor.Gold];
@@ -43,12 +45,24 @@ export const PlayerDashboard = ({ player, isActive, isCurrentPlayer, turnPhase, 
       )}
       {/* 1. Header: Name & Total Prestige Points */}
       <div className="flex justify-between items-center mb-4">
-        <div className="flex flex-col">
-          <h3 className={`text-xl font-bold font-serif leading-tight ${isActive ? 'text-amber-500' : isDark ? 'text-stone-200' : 'text-gray-800'}`}>
-            {player.name}
-          </h3>
-          <div className={`text-[10px] uppercase tracking-wider font-sans ${isDark ? 'text-stone-500' : 'text-gray-500'}`}>
-            {player.ownedNobles.length} Nobles
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            type="button"
+            onClick={() => onAvatarClick?.(player.id)}
+            className={`h-9 w-9 rounded-full border-2 border-amber-500/60 font-black text-xs flex items-center justify-center ${
+              isDark ? "bg-zinc-700 text-white hover:bg-zinc-600" : "bg-gray-200 text-gray-800 hover:bg-gray-300"
+            }`}
+            title="View opponent profile"
+          >
+            {initials}
+          </button>
+          <div className="flex flex-col min-w-0">
+            <h3 className={`text-xl font-bold font-serif leading-tight truncate ${isActive ? 'text-amber-500' : isDark ? 'text-stone-200' : 'text-gray-800'}`}>
+              {player.name}
+            </h3>
+            <div className={`text-[10px] uppercase tracking-wider font-sans ${isDark ? 'text-stone-500' : 'text-gray-500'}`}>
+              {player.ownedNobles.length} Nobles
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-1 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/30">

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { GemColor } from './game/models';
 import { useOnlineGame } from './hooks/useOnlineGame';
 import { useUserProfile } from './hooks/useUserProfile';
@@ -14,6 +14,7 @@ import { SetupPage } from './pages/SetupPage';
 import { LobbyPage } from './pages/LobbyPage';
 import { GamePage } from './pages/GamePage';
 import { UserProfile } from './components/UserProfile';
+import { AppToast } from './components/AppToast';
 
 const STORAGE_AUTH_TOKEN = 'splendor:authToken';
 const STORAGE_USERNAME = 'splendor:username';
@@ -49,14 +50,29 @@ export default function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [showProfilePage, setShowProfilePage] = useState(false);
 
-  const showToast = (message: string, type: 'error' | 'success' = 'error') => {
+  const showToast = useCallback((message: string, type: 'error' | 'success' = 'error') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 6000);
-  };
+  }, []);
+
+  const onOnlineGameToast = useCallback(
+    (payload: { message: string; type: 'error' | 'success' }) => {
+      showToast(payload.message, payload.type);
+    },
+    [showToast],
+  );
+
+  const onSetupNotify = useCallback(
+    (message: string, type?: 'error' | 'success') => {
+      showToast(message, type ?? 'error');
+    },
+    [showToast],
+  );
 
   const {
     room: { roomCode, lobbyPlayers, isHost },
     gameState,
+    gameOverInfo,
     rematchState,
     pendingDisconnect,
     pendingDisconnects,
@@ -67,10 +83,52 @@ export default function App() {
     authToken,
     localPlayerName,
     onLocalPlayerName: setLocalPlayerName,
-    onToast: ({ message, type }) => showToast(message, type),
+    onToast: onOnlineGameToast,
   });
 
-  const { profile } = useUserProfile(authToken);
+  const { profile, fetchProfile } = useUserProfile(authToken);
+
+  const prevRoomCodeRef = useRef<string | null>(null);
+  const prevShowProfileRef = useRef(false);
+
+  // After leaving lobby/game, refresh /user/me so setup shows current username, coins, etc.
+  useEffect(() => {
+    if (!authToken) return;
+    const wasInRoom = prevRoomCodeRef.current !== null;
+    prevRoomCodeRef.current = roomCode;
+    if (wasInRoom && roomCode === null) {
+      void fetchProfile();
+    }
+  }, [authToken, roomCode, fetchProfile]);
+
+  // After closing profile, refresh so setup header reflects saved username, balance, avatar, etc.
+  useEffect(() => {
+    if (!authToken) return;
+    const wasProfile = prevShowProfileRef.current;
+    prevShowProfileRef.current = showProfilePage;
+    if (wasProfile && !showProfilePage) {
+      void fetchProfile();
+    }
+  }, [authToken, showProfilePage, fetchProfile]);
+
+  // Sync display name with server after guest → member upgrade or profile username change.
+  useEffect(() => {
+    if (!authToken) return;
+    const name = profile?.username?.trim();
+    if (!name) return;
+    if (profile.is_guest === true || profile.role === 'GUEST') return;
+
+    setLocalPlayerName((prev) => {
+      if (prev === name) return prev;
+      window.localStorage.setItem(STORAGE_USERNAME, name);
+      if (socket.connected) {
+        queueMicrotask(() => {
+          socket.emit('auth:refresh');
+        });
+      }
+      return name;
+    });
+  }, [authToken, profile?.username, profile?.is_guest, profile?.role]);
 
   // Handle socket disconnection and show reconnect modal
   useEffect(() => {
@@ -207,71 +265,85 @@ export default function App() {
 
   if (!roomCode && showProfilePage) {
     return (
-      <UserProfile
-        authToken={authToken}
-        theme={theme}
-        onBack={() => setShowProfilePage(false)}
-        onLogout={() => handleLogout({ keepReconnectRoom: false, leaveRoom: true })}
-      />
+      <>
+        <AppToast toast={toast} />
+        <UserProfile
+          authToken={authToken}
+          theme={theme}
+          onBack={() => setShowProfilePage(false)}
+          onLogout={() => handleLogout({ keepReconnectRoom: false, leaveRoom: true })}
+        />
+      </>
     );
   }
 
   if (!roomCode) {
     return (
-      <SetupPage
-        theme={theme}
-        onThemeToggle={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-        publicRooms={publicRooms}
-        isLoadingPublicRooms={isLoadingPublicRooms}
-        onListPublicRooms={actions.listPublicRooms}
-        onCreateRoom={actions.createRoom}
-        onJoinRoom={actions.joinRoom}
-        onJoinPublicRoom={(roomId) => actions.joinRoom('', roomId)}
-        onLogout={() => handleLogout({ keepReconnectRoom: false, leaveRoom: true })}
-        currentUsername={profile?.username || localPlayerName || 'User'}
-        currentUserAvatarUrl={profile?.profile_picture || null}
-        onOpenProfile={() => setShowProfilePage(true)}
-      />
+      <>
+        <AppToast toast={toast} />
+        <SetupPage
+          theme={theme}
+          onThemeToggle={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          publicRooms={publicRooms}
+          isLoadingPublicRooms={isLoadingPublicRooms}
+          onListPublicRooms={actions.listPublicRooms}
+          onCreateRoom={actions.createRoom}
+          onJoinRoom={actions.joinRoom}
+          onJoinPublicRoom={(roomId) => actions.joinRoom('', roomId)}
+          onLogout={() => handleLogout({ keepReconnectRoom: false, leaveRoom: true })}
+          currentUsername={profile?.username || localPlayerName || 'User'}
+          currentUserAvatarUrl={profile?.profile_picture || null}
+          onOpenProfile={() => setShowProfilePage(true)}
+          userCoins={profile?.coins ?? null}
+          onNotify={onSetupNotify}
+        />
+      </>
     );
   }
 
   if (!gameState) {
     return (
-      <LobbyPage
-        roomCode={roomCode}
-        players={lobbyPlayers.map((name, index) => ({
-          id: `player-${index}`,
-          name,
-          isHost: index === 0,
-        }))}
-        isHost={isHost}
-        onStartGame={actions.startGame}
-        onLeaveRoom={() => actions.leaveRoom(true)}
-        onLogout={() => handleLogout({ keepReconnectRoom: false, leaveRoom: true })}
-        theme={theme}
-      />
+      <>
+        <AppToast toast={toast} />
+        <LobbyPage
+          roomCode={roomCode}
+          players={lobbyPlayers.map((name, index) => ({
+            id: `player-${index}`,
+            name,
+            isHost: index === 0,
+          }))}
+          isHost={isHost}
+          onStartGame={actions.startGame}
+          onLeaveRoom={() => actions.leaveRoom(true)}
+          onLogout={() => handleLogout({ keepReconnectRoom: false, leaveRoom: true })}
+          theme={theme}
+        />
+      </>
     );
   }
 
   return (
-    <GamePage
-      theme={theme}
-      onThemeToggle={() => setTheme(theme === "dark" ? "light" : "dark")}
-      onLogout={() => handleLogout({ keepReconnectRoom: false, leaveRoom: true })}
-      roomCode={roomCode}
-      gameState={gameState}
-      rematchState={rematchState}
-      localPlayerName={localPlayerName}
-      pendingDisconnect={pendingDisconnect}
-      pendingDisconnects={pendingDisconnects}
-      toast={toast}
-      onReconnectToRoom={(code) => actions.reconnectToRoom(code)}
-      onExitAfterDisconnect={() => handleLogout({ keepReconnectRoom: false, leaveRoom: true })}
-      actions={{
-        sendAction: actions.sendAction,
-        requestRematch: actions.requestRematch,
-        leaveRoom: actions.leaveRoom,
-      }}
-    />
+    <>
+      <AppToast toast={toast} />
+      <GamePage
+        theme={theme}
+        onThemeToggle={() => setTheme(theme === "dark" ? "light" : "dark")}
+        onLogout={() => handleLogout({ keepReconnectRoom: false, leaveRoom: true })}
+        roomCode={roomCode}
+        gameState={gameState}
+        rematchState={rematchState}
+        gameOverInfo={gameOverInfo}
+        localPlayerName={localPlayerName}
+        pendingDisconnect={pendingDisconnect}
+        pendingDisconnects={pendingDisconnects}
+        onReconnectToRoom={(code) => actions.reconnectToRoom(code)}
+        onExitAfterDisconnect={() => handleLogout({ keepReconnectRoom: false, leaveRoom: true })}
+        actions={{
+          sendAction: actions.sendAction,
+          requestRematch: actions.requestRematch,
+          leaveRoom: actions.leaveRoom,
+        }}
+      />
+    </>
   );
 }

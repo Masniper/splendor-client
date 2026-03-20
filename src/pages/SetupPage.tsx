@@ -1,21 +1,16 @@
 import React from "react";
 import { GameSetup } from "../components/GameSetup";
+import type { PublicRoomRow } from "../hooks/useOnlineGame";
 
 type SetupPageProps = {
   theme: "light" | "dark";
   onThemeToggle: () => void;
 
-  publicRooms: Array<{
-    id: string;
-    hostName: string;
-    playerCount: number;
-    status?: string;
-    canJoin?: boolean;
-  }>;
+  publicRooms: PublicRoomRow[];
   isLoadingPublicRooms: boolean;
   onListPublicRooms: () => void;
 
-  onCreateRoom: (name: string, isPublic?: boolean) => void;
+  onCreateRoom: (roomName: string, isPublic?: boolean, betAmount?: number) => void;
   onJoinRoom: (name: string, roomCode: string) => void;
   onJoinPublicRoom: (roomId: string) => void;
 
@@ -23,6 +18,8 @@ type SetupPageProps = {
   currentUsername: string;
   currentUserAvatarUrl?: string | null;
   onOpenProfile: () => void;
+  userCoins?: number | null;
+  onNotify?: (message: string, type?: "error" | "success") => void;
 };
 
 export function SetupPage(props: SetupPageProps) {
@@ -39,6 +36,8 @@ export function SetupPage(props: SetupPageProps) {
     currentUsername,
     currentUserAvatarUrl,
     onOpenProfile,
+    userCoins,
+    onNotify,
   } = props;
 
   return (
@@ -55,6 +54,8 @@ export function SetupPage(props: SetupPageProps) {
       currentUsername={currentUsername}
       currentUserAvatarUrl={currentUserAvatarUrl}
       onOpenProfile={onOpenProfile}
+      userCoins={userCoins}
+      onNotify={onNotify}
     />
   );
 }

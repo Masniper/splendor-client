@@ -1,7 +1,64 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { DevelopmentCard as IDevelopmentCard, GemColor, TurnPhase } from '../game/models';
 import { gemStyles, gemIconSrc } from '../constants';
+import {
+  cardImageFallback,
+  cardImageSrc,
+  deckTextureFallback,
+  deckTextureSrc,
+} from '../utils/cardAssets';
+
+function CardFaceImage({ cardId }: { cardId: string }) {
+  const [src, setSrc] = useState(() => cardImageSrc(cardId));
+
+  useEffect(() => {
+    setSrc(cardImageSrc(cardId));
+  }, [cardId]);
+
+  return (
+    <img
+      className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover"
+      src={src}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      onError={() =>
+        setSrc((prev) =>
+          prev === cardImageFallback(cardId) ? prev : cardImageFallback(cardId)
+        )
+      }
+    />
+  );
+}
+
+function DeckTexture({ isDark }: { isDark: boolean }) {
+  const [useCdn, setUseCdn] = useState(false);
+
+  useEffect(() => {
+    setUseCdn(false);
+  }, [isDark]);
+
+  const url = useCdn ? deckTextureFallback(isDark) : deckTextureSrc(isDark);
+
+  return (
+    <>
+      <img
+        src={deckTextureSrc(isDark)}
+        alt=""
+        className="hidden"
+        onError={() => setUseCdn(true)}
+      />
+      <div
+        className="absolute inset-0 opacity-50"
+        style={{
+          backgroundImage: `url(${url})`,
+          backgroundRepeat: 'repeat',
+        }}
+      />
+    </>
+  );
+}
 
 interface CardProps {
   card: IDevelopmentCard;
@@ -16,17 +73,10 @@ export const DevelopmentCard = (props: CardProps) => {
   const { card, onBuy, onReserve, affordable, turnPhase, isReserved = false } = props;
   const [showMenu, setShowMenu] = useState(false);
 
-  const style = gemStyles[card.colorBonus];
   const levelBorders = {
     1: 'border-emerald-700',
     2: 'border-amber-600',
     3: 'border-blue-700'
-  };
-
-  const levelBgs = {
-    1: 'bg-emerald-900/20',
-    2: 'bg-amber-900/20',
-    3: 'bg-blue-900/20'
   };
 
   const isPurchasable = affordable && turnPhase === 'MainAction';
@@ -47,10 +97,10 @@ export const DevelopmentCard = (props: CardProps) => {
         transition: { scale: { repeat: Infinity, duration: 1.5, ease: "easeInOut" } }
       } : { opacity: 1, y: 0 }}
       whileHover={{ scale: 1.03, y: -3 }}
-      className={`w-full min-w-[70px] max-w-[85px] sm:min-w-[90px] sm:max-w-[130px] lg:max-w-[160px] lg:min-w-[120px] aspect-[2/3] shrink-0 rounded-xl border-2 ${levelBorders[card.level]} ${levelBgs[card.level]} p-0 flex flex-col justify-between shadow-md relative group overflow-hidden bg-cover bg-center transition-shadow cursor-pointer ${isPurchasable ? 'shadow-[0_0_15px_rgba(255,255,255,0.6)]' : ''}`}
-      style={{ backgroundImage: `url(https://loremflickr.com/400/600/nature,landscape?lock=${card.id.replace('c-', '')})` }}
+      className={`w-full min-w-[70px] max-w-[85px] sm:min-w-[90px] sm:max-w-[130px] lg:max-w-[160px] lg:min-w-[120px] aspect-[2/3] shrink-0 rounded-xl border-2 ${levelBorders[card.level]} p-0 flex flex-col justify-between shadow-md relative group overflow-hidden transition-shadow cursor-pointer ${isPurchasable ? 'shadow-[0_0_15px_rgba(255,255,255,0.6)]' : ''}`}
     >
-      <div className="bg-white/30 backdrop-blur-md p-1 sm:p-1.5 flex justify-between items-start border-b border-white/20 rounded-t-xl">
+      <CardFaceImage cardId={card.id} />
+      <div className="relative z-10 bg-white/30 backdrop-blur-md p-1 sm:p-1.5 flex justify-between items-start border-b border-white/20 rounded-t-xl">
         <div className="rounded-md px-1 py-0 min-w-[1rem] sm:min-w-[1.2rem] lg:min-w-[1.5rem] text-center">
           <span className="text-sm sm:text-lg lg:text-2xl font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,1)] font-serif">
             {card.prestigePoints > 0 ? card.prestigePoints : ''}
@@ -63,7 +113,7 @@ export const DevelopmentCard = (props: CardProps) => {
         />
       </div>
 
-      <div className="flex flex-col gap-0.5 sm:gap-1 p-1 sm:p-1.5 w-fit mt-auto mb-1">
+      <div className="relative z-10 flex flex-col gap-0.5 sm:gap-1 p-1 sm:p-1.5 w-fit mt-auto mb-1">
         {(Object.keys(card.cost) as GemColor[]).map((color) => {
           const amount = card.cost[color];
           if (!amount) return null;
@@ -139,7 +189,7 @@ export const Deck = (props: DeckProps) => {
       onMouseLeave={() => setShowMenu(false)}
       className={`w-full min-w-[70px] max-w-[85px] sm:min-w-[90px] sm:max-w-[130px] lg:max-w-[160px] aspect-[2/3] shrink-0 rounded-xl ${bgColors[level]} ring-1 ring-white/20 border-2 border-yellow-600/50 flex flex-col items-center justify-center shadow-lg relative group overflow-hidden cursor-pointer`}
     >
-      <div className={`absolute inset-0 opacity-50 ${isDark ? "bg-[url('https://www.transparenttextures.com/patterns/diagmonds.png')]" : " bg-[url('https://www.transparenttextures.com/patterns/diagmonds-light.png')]"}`} />
+      <DeckTexture isDark={isDark} />
       
       <span className="text-yellow-400 font-serif font-bold text-[10px] sm:text-lg lg:text-2xl drop-shadow-md relative z-10">Splendor</span>
       <span className="text-white/80 text-[8px] sm:text-xs lg:text-sm font-serif mt-0.5 sm:mt-1 relative z-10">{count} cards</span>

@@ -1,5 +1,15 @@
 {
-  "name": "Splendor Engine",
-  "description": "Core game engine and architecture for a digital version of the board game Splendor.",
+  "name": "Splendor Online",
+  "shortName": "Splendor",
+  "version": "1.0.0",
+  "description": "Play Splendor in the browser with friends — real-time multiplayer, rooms, bets, and profiles.",
+  "keywords": [
+    "splendor",
+    "board game",
+    "multiplayer",
+    "online",
+    "react",
+    "vite"
+  ],
   "requestFramePermissions": []
 }

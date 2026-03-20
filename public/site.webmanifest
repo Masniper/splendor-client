@@ -1,7 +1,7 @@
 {
-  "name": "Splendor",
+  "name": "Splendor Online",
   "short_name": "Splendor",
-  "description": "A modern React + TypeScript implementation of Splendor (board game) built with Vite.",
+  "description": "Splendor Online — real-time multiplayer Splendor in the browser.",
   "icons": [
     {
       "src": "/android-chrome-192x192.png",

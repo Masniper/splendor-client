@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { Volume2, VolumeX } from "lucide-react";
 import { CenterBoard } from "../components/CenterBoard";
 import { GameOverModal } from "../components/GameOverModal";
 import { HowToPlayModal } from "../components/HowToPlayModal";
@@ -9,6 +10,8 @@ import { PlayerDashboard } from "../components/PlayerDashboard";
 import { gemIconSrc, gemStyles, gemStylesBank } from "../constants";
 import { GameState, GemColor } from "../game/models";
 import { useOpponentProfile } from "../hooks/useOpponentProfile";
+import { RoomChatPanel } from "../components/RoomChatPanel";
+import { useGameAudio } from "../context/GameAudioContext";
 
 type PendingDiscardAction =
   | { type: "TAKE_TOKENS"; tokens: GemColor[] }
@@ -47,6 +50,9 @@ type GamePageProps = {
     }>;
   } | null;
   localPlayerName: string;
+  localUserId?: string | null;
+  /** Toast when a chat message arrives while the in-game chat sidebar is closed. */
+  onChatBackgroundNotify?: (payload: { username: string; text: string }) => void;
   pendingDisconnect: any;
   pendingDisconnects: any[];
 
@@ -73,6 +79,8 @@ export function GamePage(props: GamePageProps) {
     rematchState,
     gameOverInfo,
     localPlayerName,
+    localUserId = null,
+    onChatBackgroundNotify,
     pendingDisconnect,
     pendingDisconnects,
     onReconnectToRoom,
@@ -80,6 +88,7 @@ export function GamePage(props: GamePageProps) {
     actions,
   } = props;
 
+  const { play, muted, toggleMuted } = useGameAudio();
   const isDark = theme === "dark";
   const [showRules, setShowRules] = useState(false);
   const {
@@ -202,6 +211,7 @@ export function GamePage(props: GamePageProps) {
     if (color === GemColor.Gold) return;
     const count = selectedTokens.filter((c) => c === color).length;
     if (count >= 2) return;
+    play("gemPick");
     setSelectedTokens([...selectedTokens, color]);
   };
 
@@ -215,6 +225,7 @@ export function GamePage(props: GamePageProps) {
       newSelection.splice(indexToRemove, 1);
       setDiscardSelection(newSelection);
     } else if (currentCount < (availableTokens[color] || 0)) {
+      play("gemPick");
       setDiscardSelection([...discardSelection, color]);
     }
   };
@@ -233,12 +244,14 @@ export function GamePage(props: GamePageProps) {
     const overflow = Math.max(0, totalAfter - 10);
 
     if (overflow > 0) {
+      play("card");
       setPendingDiscardAction({ type: "TAKE_TOKENS", tokens: selectedTokens });
       setDiscardSelection([]);
       setShowDiscardModal(true);
       return;
     }
 
+    play("actionSubmit");
     actions.sendAction({ type: "TAKE_TOKENS", payload: { tokens: selectedTokens } });
     setSelectedTokens([]);
   };
@@ -249,12 +262,14 @@ export function GamePage(props: GamePageProps) {
     const totalAfter = getTotalTokens(current) + (willReceiveGold ? 1 : 0);
 
     if (totalAfter > 10) {
+      play("card");
       setPendingDiscardAction({ type: "RESERVE_CARD", cardId, willReceiveGold });
       setDiscardSelection([]);
       setShowDiscardModal(true);
       return;
     }
 
+    play("reserve");
     actions.sendAction({ type: "RESERVE_CARD", payload: { cardId } });
   };
 
@@ -264,12 +279,14 @@ export function GamePage(props: GamePageProps) {
     const totalAfter = getTotalTokens(current) + (willReceiveGold ? 1 : 0);
 
     if (totalAfter > 10) {
+      play("card");
       setPendingDiscardAction({ type: "RESERVE_FROM_DECK", level, willReceiveGold });
       setDiscardSelection([]);
       setShowDiscardModal(true);
       return;
     }
 
+    play("reserve");
     actions.sendAction({ type: "RESERVE_FROM_DECK", payload: { level } });
   };
 
@@ -279,17 +296,20 @@ export function GamePage(props: GamePageProps) {
 
     if (pendingDiscardAction) {
       if (pendingDiscardAction.type === "TAKE_TOKENS") {
+        play("discard");
         actions.sendAction({
           type: "TAKE_TOKENS",
           payload: { tokens: pendingDiscardAction.tokens, discardTokens: discardSelection },
         });
         setSelectedTokens([]);
       } else if (pendingDiscardAction.type === "RESERVE_CARD") {
+        play("discard");
         actions.sendAction({
           type: "RESERVE_CARD",
           payload: { cardId: pendingDiscardAction.cardId, discardTokens: discardSelection },
         });
       } else if (pendingDiscardAction.type === "RESERVE_FROM_DECK") {
+        play("discard");
         actions.sendAction({
           type: "RESERVE_FROM_DECK",
           payload: { level: pendingDiscardAction.level, discardTokens: discardSelection },
@@ -297,6 +317,7 @@ export function GamePage(props: GamePageProps) {
       }
       setPendingDiscardAction(null);
     } else {
+      play("discard");
       actions.sendAction({ type: "DISCARD_TOKENS", payload: { tokens: discardSelection } });
     }
 
@@ -349,13 +370,19 @@ export function GamePage(props: GamePageProps) {
               </p>
               <div className="flex gap-3">
                 <button
-                  onClick={() => onReconnectToRoom(disconnectedRoomCode)}
+                  type="button"
+                  onClick={() => {
+                    play("uiTap");
+                    onReconnectToRoom(disconnectedRoomCode);
+                  }}
                   className="flex-1 py-3 bg-amber-600 text-white rounded-lg font-bold hover:bg-amber-500 transition-all"
                 >
                   Reconnect
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
+                    play("uiTap");
                     setShowReconnectModal(false);
                     setDisconnectedRoomCode(null);
                     onExitAfterDisconnect();
@@ -428,14 +455,23 @@ export function GamePage(props: GamePageProps) {
         )}
 
         {showRules && (
-          <HowToPlayModal isDark={isDark} onClose={() => setShowRules(false)} />
+          <HowToPlayModal
+            isDark={isDark}
+            onClose={() => {
+              play("uiTap");
+              setShowRules(false);
+            }}
+          />
         )}
         <OpponentProfileModal
           isOpen={isOpponentModalOpen}
           isLoading={isOpponentLoading}
           error={opponentError}
           profile={opponentProfile}
-          onClose={closeOpponentProfile}
+          onClose={() => {
+            play("uiTap");
+            closeOpponentProfile();
+          }}
           theme={theme}
         />
 
@@ -445,10 +481,14 @@ export function GamePage(props: GamePageProps) {
             winner={gameState.winner}
             localPlayerName={localPlayerName}
             rematchState={rematchState}
-            onRequestRematch={actions.requestRematch}
-            onBackToMenu={() =>
-              actions.leaveRoom(true, { clearStoredSession: true })
-            }
+            onRequestRematch={() => {
+              play("uiTap");
+              actions.requestRematch();
+            }}
+            onBackToMenu={() => {
+              play("uiTap");
+              actions.leaveRoom(true, { clearStoredSession: true });
+            }}
             isDark={isDark}
             reason={gameOverInfo?.reason}
             winnerStats={gameOverInfo?.winnerStats ?? null}
@@ -487,12 +527,13 @@ export function GamePage(props: GamePageProps) {
                     <NobleTile
                       noble={noble}
                       isSelectable={true}
-                      onClick={() =>
+                      onClick={() => {
+                        play("noble");
                         actions.sendAction({
                           type: "CHOOSE_NOBLE",
                           payload: { nobleId: noble.id },
-                        })
-                      }
+                        });
+                      }}
                     />
                   </div>
                 ))}
@@ -667,7 +708,11 @@ export function GamePage(props: GamePageProps) {
 
         <div className="flex items-center gap-2 sm:gap-6 flex-nowrap shrink-0">
           <button
-            onClick={() => setShowRules(true)}
+            type="button"
+            onClick={() => {
+              play("uiTap");
+              setShowRules(true);
+            }}
             className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-full font-bold transition-all shadow-md flex items-center gap-2 text-sm sm:text-base ${
               isDark ? "bg-zinc-800 text-stone-300 hover:bg-zinc-700" : "bg-white text-gray-700 hover:bg-gray-50 border border-gray-200"
             }`}
@@ -675,7 +720,21 @@ export function GamePage(props: GamePageProps) {
             <span className="text-amber-500">?</span> Rules
           </button>
           <button
-            onClick={onThemeToggle}
+            type="button"
+            title={muted ? "Unmute sound effects" : "Mute sound effects"}
+            onClick={toggleMuted}
+            className={`p-1.5 sm:p-3 rounded-full transition-all shadow-md ${
+              isDark ? "bg-zinc-800 text-amber-400 hover:bg-zinc-700" : "bg-white text-amber-600 hover:bg-gray-50 border border-gray-200"
+            } ${muted ? "opacity-60" : ""}`}
+          >
+            {muted ? <VolumeX className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden /> : <Volume2 className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden />}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              play("uiTap");
+              onThemeToggle();
+            }}
             className={`p-1.5 sm:p-3 rounded-full transition-all shadow-md ${
               isDark ? "bg-zinc-800 text-amber-400 hover:bg-zinc-700" : "bg-white text-amber-600 hover:bg-gray-50 border border-gray-200"
             }`}
@@ -684,6 +743,15 @@ export function GamePage(props: GamePageProps) {
           </button>
         </div>
       </div>
+
+      <RoomChatPanel
+        roomCode={roomCode}
+        theme={theme}
+        localPlayerName={localPlayerName}
+        localUserId={localUserId}
+        layout="sidebar"
+        onChatBackgroundNotify={onChatBackgroundNotify}
+      />
 
       {/* Main Layout */}
       <div className="max-w-7xl mx-auto w-full flex flex-col lg:flex-row gap-2 lg:gap-4 flex-1 min-h-0 items-stretch">
@@ -729,12 +797,13 @@ export function GamePage(props: GamePageProps) {
                     isCurrentPlayer={player.name === localPlayerName}
                     turnPhase={gameState.turnPhase}
                     onAvatarClick={(playerId) => openOpponentProfile(playerId)}
-                    onBuyReserved={(cardId) =>
+                    onBuyReserved={(cardId) => {
+                      play("purchase");
                       actions.sendAction({
                         type: "PURCHASE_CARD",
                         payload: { cardId },
-                      })
-                    }
+                      });
+                    }}
                     theme={theme}
                   />
                 </div>
@@ -750,10 +819,14 @@ export function GamePage(props: GamePageProps) {
             selectedTokens={selectedTokens}
             onTokenClick={toggleTokenSelection}
             onTakeTokens={handleTakeTokens}
-            onClearTokens={() => setSelectedTokens([])}
-            onBuyCard={(id) =>
-              actions.sendAction({ type: "PURCHASE_CARD", payload: { cardId: id } })
-            }
+            onClearTokens={() => {
+              play("uiTap");
+              setSelectedTokens([]);
+            }}
+            onBuyCard={(id) => {
+              play("purchase");
+              actions.sendAction({ type: "PURCHASE_CARD", payload: { cardId: id } });
+            }}
             onReserveCard={handleReserveCard}
             onReserveFromDeck={handleReserveFromDeck}
             isDark={isDark}

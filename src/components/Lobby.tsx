@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
+import { RoomChatPanel } from "./RoomChatPanel";
+import { useGameAudio } from "../context/GameAudioContext";
 
 interface Player {
   id: string;
@@ -13,14 +15,28 @@ interface LobbyProps {
   onStartGame: () => void;
   onLeaveRoom: () => void;
   onLogout?: () => void;
-  theme: 'light' | 'dark';
+  theme: "light" | "dark";
+  localPlayerName: string;
+  localUserId?: string | null;
 }
 
-export const Lobby = ({ roomCode, players, isHost, onStartGame, onLeaveRoom, onLogout, theme }: LobbyProps) => {
+export const Lobby = ({
+  roomCode,
+  players,
+  isHost,
+  onStartGame,
+  onLeaveRoom,
+  onLogout,
+  theme,
+  localPlayerName,
+  localUserId,
+}: LobbyProps) => {
+  const { play } = useGameAudio();
   const [copied, setCopied] = useState(false);
   const isDark = theme === 'dark';
 
   const handleCopyCode = () => {
+    play("uiTap");
     navigator.clipboard.writeText(roomCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -110,10 +126,24 @@ export const Lobby = ({ roomCode, players, isHost, onStartGame, onLeaveRoom, onL
           </ul>
         </div>
 
+        <div className="mb-6 text-left">
+          <RoomChatPanel
+            roomCode={roomCode}
+            theme={theme}
+            localPlayerName={localPlayerName}
+            localUserId={localUserId}
+            layout="embedded"
+          />
+        </div>
+
         {/* Action Buttons */}
         <div className="flex gap-4">
           <button
-            onClick={onLeaveRoom}
+            type="button"
+            onClick={() => {
+              play("uiTap");
+              onLeaveRoom();
+            }}
             className={`flex-1 py-4 rounded-xl font-bold transition-all ${isDark ? 'bg-red-900/50 text-red-200 hover:bg-red-900/80 border border-red-900' : 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'}`}
           >
             Leave
@@ -121,7 +151,11 @@ export const Lobby = ({ roomCode, players, isHost, onStartGame, onLeaveRoom, onL
           
           {isHost ? (
             <button
-              onClick={onStartGame}
+              type="button"
+              onClick={() => {
+                play("uiTap");
+                onStartGame();
+              }}
               disabled={players.length < 2}
               className="flex-[2] py-4 bg-amber-600 text-white rounded-xl font-bold hover:bg-amber-500 shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             >

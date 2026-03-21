@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useGameAudio } from '../context/GameAudioContext';
 
 interface AuthScreenProps {
   onLogin: (token: string, username: string) => void;
@@ -8,9 +9,11 @@ interface AuthScreenProps {
   onThemeToggle: () => void;
 }
 
-const API_BASE_URL = 'http://localhost:5001/api';
+// Use same-origin API behind Nginx. Optionally override at build time.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 export function AuthScreen({ onLogin, onPlayGuest, theme, onThemeToggle }: AuthScreenProps) {
+  const { play } = useGameAudio();
   const [mode, setMode] = useState<'login' | 'register' | 'guest'>('login');
   
   // Form fields
@@ -26,6 +29,7 @@ export function AuthScreen({ onLogin, onPlayGuest, theme, onThemeToggle }: AuthS
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    play('uiTap');
     setLoading(true);
     setError(null);
 
@@ -38,11 +42,13 @@ export function AuthScreen({ onLogin, onPlayGuest, theme, onThemeToggle }: AuthS
         const data = await response.json();
         
         if (response.ok && data.success && data.data?.token && data.data?.user?.id) {
+          play('success');
           onLogin(
             data.data.token,
             `Guest_${data.data.user.id.substring(0, 4)}`,
           );
         } else {
+          play('error');
           setError(data.message || 'Failed to create guest session');
         }
       } 
@@ -56,11 +62,13 @@ export function AuthScreen({ onLogin, onPlayGuest, theme, onThemeToggle }: AuthS
         const data = await response.json();
 
         if (response.ok && data.data?.token) {
+          play('success');
           onLogin(
             data.data.token,
             data.data.user?.username || email.split('@')[0],
           );
         } else {
+          play('error');
           setError(data.message || 'Invalid credentials');
         }
       } 
@@ -74,15 +82,18 @@ export function AuthScreen({ onLogin, onPlayGuest, theme, onThemeToggle }: AuthS
         const data = await response.json();
 
         if (response.ok) {
+          play('success');
           // After successful registration, switch to login or auto-login
           // Assuming register doesn't return a token based on swagger, we switch to login
           setMode('login');
           setError('Registration successful. Please login.');
         } else {
+          play('error');
           setError(data.message || 'Registration failed');
         }
       }
     } catch (err) {
+      play('error');
       setError('Network error. Please try again later.');
     } finally {
       setLoading(false);
@@ -94,7 +105,7 @@ export function AuthScreen({ onLogin, onPlayGuest, theme, onThemeToggle }: AuthS
          style={{ backgroundImage: `linear-gradient(${isDark ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.8)"}, ${isDark ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.8)"}), url('/images/startup-bg.jpg')` }}
     >
       <div className="absolute top-4 right-4">
-        <button onClick={onThemeToggle} className={`p-2 rounded-lg transition-colors ${isDark ? 'bg-stone-800 text-yellow-400' : 'bg-stone-200 text-indigo-600'}`}>
+        <button type="button" onClick={() => { play('uiTap'); onThemeToggle(); }} className={`p-2 rounded-lg transition-colors ${isDark ? 'bg-stone-800 text-yellow-400' : 'bg-stone-200 text-indigo-600'}`}>
           {isDark ? '☀️' : '🌙'}
         </button>
       </div>
@@ -170,17 +181,17 @@ export function AuthScreen({ onLogin, onPlayGuest, theme, onThemeToggle }: AuthS
 
         <div className="mt-6 flex flex-col gap-2 text-center text-sm">
           {mode !== 'login' && (
-            <button onClick={() => { setMode('login'); setError(null); }} className="text-stone-400 hover:text-yellow-400 transition-colors">
+            <button type="button" onClick={() => { play('uiTap'); setMode('login'); setError(null); }} className="text-stone-400 hover:text-yellow-400 transition-colors">
               Already have an account? Login
             </button>
           )}
           {mode !== 'register' && (
-            <button onClick={() => { setMode('register'); setError(null); }} className="text-stone-400 hover:text-yellow-400 transition-colors">
+            <button type="button" onClick={() => { play('uiTap'); setMode('register'); setError(null); }} className="text-stone-400 hover:text-yellow-400 transition-colors">
               Need an account? Register
             </button>
           )}
           {mode !== 'guest' && (
-            <button onClick={() => { setMode('guest'); setError(null); }} className="text-stone-500 hover:text-stone-300 transition-colors mt-2">
+            <button type="button" onClick={() => { play('uiTap'); setMode('guest'); setError(null); }} className="text-stone-500 hover:text-stone-300 transition-colors mt-2">
               Or play as a guest
             </button>
           )}

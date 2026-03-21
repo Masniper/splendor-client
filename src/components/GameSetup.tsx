@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Coins, Plus, RefreshCw, Trophy } from "lucide-react";
+import { Coins, Plus, RefreshCw, Trophy, Volume2, VolumeX } from "lucide-react";
+import { useGameAudio } from "../context/GameAudioContext";
 import type { PublicRoomRow } from "../hooks/useOnlineGame";
 import { LeaderboardModal } from "./LeaderboardModal";
 
@@ -41,6 +42,7 @@ export const GameSetup = ({
   userCoins = null,
   onNotify,
 }: GameSetupProps) => {
+  const { play, muted, toggleMuted } = useGameAudio();
   const [roomCode, setRoomCode] = useState<string>("");
   const [isPublic, setIsPublic] = useState<boolean>(true);
   const [roomName, setRoomName] = useState<string>("");
@@ -99,6 +101,7 @@ export const GameSetup = ({
       }
     }
 
+    play("uiTap");
     setIsConnecting(true);
     onCreateRoom(roomName, isPublic, normalizedBetAmount);
     setShowCreateModal(false);
@@ -111,6 +114,7 @@ export const GameSetup = ({
       if (!code) notify("Enter a room code first.", "error");
       return;
     }
+    play("uiTap");
     setIsConnecting(true);
     onJoinRoom("", code);
     setTimeout(() => setIsConnecting(false), 3000);
@@ -128,6 +132,7 @@ export const GameSetup = ({
       return;
     }
     if (room.canJoin === false) return;
+    play("uiTap");
     onJoinPublicRoom(room.id);
   };
 
@@ -286,7 +291,22 @@ export const GameSetup = ({
         </div>
         <button
           type="button"
-          onClick={onThemeToggle}
+          title={muted ? "Unmute sound effects" : "Mute sound effects"}
+          onClick={toggleMuted}
+          className={`rounded border p-1.5 text-sm shadow-sm transition-colors sm:p-2 ${
+            isDark
+              ? "border-zinc-600 bg-zinc-800 text-amber-400 hover:bg-zinc-700"
+              : "border-gray-300 bg-gray-100 text-amber-600 hover:bg-gray-200"
+          } ${muted ? "opacity-60" : ""}`}
+        >
+          {muted ? <VolumeX className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden /> : <Volume2 className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden />}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            play("uiTap");
+            onThemeToggle();
+          }}
           className={`rounded border p-1.5 text-sm shadow-sm transition-colors sm:p-2 ${
             isDark
               ? "border-zinc-600 bg-zinc-800 text-amber-400 hover:bg-zinc-700"

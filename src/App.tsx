@@ -14,12 +14,15 @@ import { SetupPage } from './pages/SetupPage';
 import { LobbyPage } from './pages/LobbyPage';
 import { GamePage } from './pages/GamePage';
 import { UserProfile } from './components/UserProfile';
-import { AppToast } from './components/AppToast';
+import { AppToast, type ToastItem } from './components/AppToast';
+import { useGameAudio } from './context/GameAudioContext';
 
 const STORAGE_AUTH_TOKEN = 'splendor:authToken';
 const STORAGE_USERNAME = 'splendor:username';
 
 export default function App() {
+  const { play } = useGameAudio();
+
   // Auth States
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authToken, setAuthToken] = useState<string | null>(null);
@@ -44,16 +47,56 @@ export default function App() {
     }
   }, []);
 
-  const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
   
   // UI States
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [showProfilePage, setShowProfilePage] = useState(false);
 
-  const showToast = useCallback((message: string, type: 'error' | 'success' = 'error') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 6000);
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  const showToast = useCallback(
+    (
+      message: string,
+      type: 'error' | 'success' = 'error',
+      silentSound = false,
+    ) => {
+      if (!silentSound) {
+        if (type === 'error') play('error');
+        if (type === 'success') play('success');
+      }
+      const id = crypto.randomUUID();
+      const item: ToastItem = {
+        id,
+        message,
+        type,
+        variant: 'default',
+      };
+      setToasts((prev) => [...prev, item].slice(-8));
+      window.setTimeout(() => dismissToast(id), 6000);
+    },
+    [play, dismissToast],
+  );
+
+  const onChatBackgroundNotify = useCallback(
+    (payload: { username: string; text: string }) => {
+      const t = payload.text.trim();
+      const preview = t.length > 120 ? `${t.slice(0, 120)}…` : t;
+      const id = crypto.randomUUID();
+      const item: ToastItem = {
+        id,
+        type: 'success',
+        title: `New message from ${payload.username}`,
+        message: preview,
+        variant: 'chat',
+      };
+      setToasts((prev) => [...prev, item].slice(-8));
+      window.setTimeout(() => dismissToast(id), 6500);
+    },
+    [dismissToast],
+  );
 
   const onOnlineGameToast = useCallback(
     (payload: { message: string; type: 'error' | 'success' }) => {
@@ -84,6 +127,7 @@ export default function App() {
     localPlayerName,
     onLocalPlayerName: setLocalPlayerName,
     onToast: onOnlineGameToast,
+    onPlaySound: play,
   });
 
   const { profile, fetchProfile } = useUserProfile(authToken);
@@ -266,7 +310,7 @@ export default function App() {
   if (!roomCode && showProfilePage) {
     return (
       <>
-        <AppToast toast={toast} />
+        <AppToast toasts={toasts} />
         <UserProfile
           authToken={authToken}
           theme={theme}
@@ -280,7 +324,7 @@ export default function App() {
   if (!roomCode) {
     return (
       <>
-        <AppToast toast={toast} />
+        <AppToast toasts={toasts} />
         <SetupPage
           theme={theme}
           onThemeToggle={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
@@ -304,7 +348,7 @@ export default function App() {
   if (!gameState) {
     return (
       <>
-        <AppToast toast={toast} />
+        <AppToast toasts={toasts} />
         <LobbyPage
           roomCode={roomCode}
           players={lobbyPlayers.map((name, index) => ({
@@ -317,6 +361,8 @@ export default function App() {
           onLeaveRoom={() => actions.leaveRoom(true)}
           onLogout={() => handleLogout({ keepReconnectRoom: false, leaveRoom: true })}
           theme={theme}
+          localPlayerName={localPlayerName}
+          localUserId={profile?.id ?? null}
         />
       </>
     );
@@ -324,7 +370,7 @@ export default function App() {
 
   return (
     <>
-      <AppToast toast={toast} />
+      <AppToast toasts={toasts} />
       <GamePage
         theme={theme}
         onThemeToggle={() => setTheme(theme === "dark" ? "light" : "dark")}
@@ -334,6 +380,8 @@ export default function App() {
         rematchState={rematchState}
         gameOverInfo={gameOverInfo}
         localPlayerName={localPlayerName}
+        localUserId={profile?.id ?? null}
+        onChatBackgroundNotify={onChatBackgroundNotify}
         pendingDisconnect={pendingDisconnect}
         pendingDisconnects={pendingDisconnects}
         onReconnectToRoom={(code) => actions.reconnectToRoom(code)}

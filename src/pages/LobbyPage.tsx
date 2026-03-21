@@ -9,11 +9,22 @@ type LobbyPageProps = {
   onStartGame: () => void;
   onLeaveRoom: () => void;
   onLogout: () => void;
+  localPlayerName: string;
+  localUserId?: string | null;
 };
 
 export function LobbyPage(props: LobbyPageProps) {
-  const { roomCode, players, isHost, theme, onStartGame, onLeaveRoom, onLogout } =
-    props;
+  const {
+    roomCode,
+    players,
+    isHost,
+    theme,
+    onStartGame,
+    onLeaveRoom,
+    onLogout,
+    localPlayerName,
+    localUserId,
+  } = props;
 
   return (
     <Lobby
@@ -24,6 +35,8 @@ export function LobbyPage(props: LobbyPageProps) {
       onLeaveRoom={onLeaveRoom}
       onLogout={onLogout}
       theme={theme}
+      localPlayerName={localPlayerName}
+      localUserId={localUserId}
     />
   );
 }

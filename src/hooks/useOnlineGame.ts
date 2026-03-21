@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { GameSoundId } from "../audio/gameAudio";
 import { socket } from "../network/socket";
 import { GameState, GemColor } from "../game/models";
 
@@ -49,6 +50,7 @@ type UseOnlineGameArgs = {
   localPlayerName: string;
   onLocalPlayerName: (name: string) => void;
   onToast: (toast: Toast) => void;
+  onPlaySound?: (sound: GameSoundId) => void;
 };
 
 const RECONNECT_ROOM_STORAGE_KEY = "splendor:reconnectRoom";
@@ -58,7 +60,11 @@ export function useOnlineGame({
   localPlayerName,
   onLocalPlayerName,
   onToast,
+  onPlaySound,
 }: UseOnlineGameArgs) {
+  const playRef = useRef(onPlaySound);
+  playRef.current = onPlaySound;
+
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [lobbyPlayers, setLobbyPlayers] = useState<string[]>([]);
   const [isHost, setIsHost] = useState(false);
@@ -181,10 +187,26 @@ export function useOnlineGame({
 
     const handleGameUpdated = (payload: { gameState: GameState }) => {
       console.log("[Frontend] Game updated:", payload.gameState);
-      setGameState(payload.gameState);
+      setGameState((prevState) => {
+        const next = payload.gameState;
+        if (prevState && localPlayerName) {
+          const prevIdx = prevState.currentPlayerIndex;
+          const nextIdx = next.currentPlayerIndex;
+          const nextCurrentName = next.players[nextIdx]?.name;
+          if (
+            prevIdx !== nextIdx &&
+            nextCurrentName === localPlayerName &&
+            !next.winner
+          ) {
+            queueMicrotask(() => playRef.current?.("yourTurn"));
+          }
+        }
+        return next;
+      });
     };
 
     const handleGameStarted = (payload: { gameState: GameState }) => {
+      playRef.current?.("gameStart");
       setGameState(payload.gameState);
       setRematchState(null);
       setGameOverInfo(null);
@@ -243,6 +265,9 @@ export function useOnlineGame({
       }>;
       finalState?: any;
     }) => {
+      const w = payload?.winner;
+      if (w?.name === localPlayerName) playRef.current?.("win");
+      else if (w) playRef.current?.("lose");
       setGameOverInfo(payload ?? null);
     };
 

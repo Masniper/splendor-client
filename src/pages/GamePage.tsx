@@ -333,16 +333,22 @@ export function GamePage(props: GamePageProps) {
   const requiredDiscardCount = getRequiredDiscardCount();
 
   return (
-    <div
-      className={`min-h-screen w-full overflow-y-auto transition-colors duration-500 p-2 sm:p-4 lg:p-8 pt-14 sm:pt-16 font-sans flex flex-col bg-cover bg-center bg-fixed ${
-        isDark ? "text-stone-100" : "text-gray-800"
-      }`}
-      style={{
-        backgroundImage: `linear-gradient(${
-          isDark ? "rgba(0,0,0,0.22)" : "rgba(255,255,255,0.16)"
-        }, ${isDark ? "rgba(0,0,0,0.22)" : "rgba(255,255,255,0.16)"}), url('/images/game-bg.jpg')`,
-      }}
-    >
+    <div className="relative min-h-screen">
+      {/* Fixed layer: avoids `background-attachment: fixed` on the scrolling root (very costly on mobile). */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 -z-10 bg-cover bg-center bg-no-repeat"
+        style={{
+          backgroundImage: `linear-gradient(${
+            isDark ? "rgba(0,0,0,0.22)" : "rgba(255,255,255,0.16)"
+          }, ${isDark ? "rgba(0,0,0,0.22)" : "rgba(255,255,255,0.16)"}), url('/images/game-bg.jpg')`,
+        }}
+      />
+      <div
+        className={`min-h-screen w-full overflow-y-auto transition-colors duration-500 p-2 sm:p-4 lg:p-8 pt-14 sm:pt-16 font-sans flex flex-col ${
+          isDark ? "text-stone-100" : "text-gray-800"
+        }`}
+      >
       {/* Modals */}
       <AnimatePresence>
         {showReconnectModal && disconnectedRoomCode && (
@@ -836,6 +842,7 @@ export function GamePage(props: GamePageProps) {
           />
         </div>
       </div>
+    </div>
     </div>
   );
 }

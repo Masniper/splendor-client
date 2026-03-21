@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 
-const API_BASE_URL = "http://localhost:5001/api";
+// Use same-origin API behind Nginx. Optionally override at build time.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 export interface OpponentProfileData {
   id: string;

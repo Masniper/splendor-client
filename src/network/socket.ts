@@ -1,7 +1,10 @@
 import { io, Socket } from 'socket.io-client';
 
-// Change this to your actual backend URL when deploying
-const SOCKET_URL = 'http://localhost:5001';
+// In production we want to connect from the same origin (behind Nginx).
+// Optionally override via VITE_SOCKET_URL at build time.
+const SOCKET_URL =
+  import.meta.env.VITE_SOCKET_URL ??
+  (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5001');
 
 export const socket: Socket = io(SOCKET_URL, {
   autoConnect: false, // We will connect manually when needed

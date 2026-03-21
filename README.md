@@ -23,6 +23,7 @@ Browser client for **Splendor Online**: auth, lobby, public rooms, live multipla
 - **Social** — Leaderboard modal, optional opponent profile from avatars
 - **Game over** — Winner/loser summaries with account stats when the server settles bets
 - **Responsiveness** — Layout tuned for desktop, tablet, and mobile (setup & modals)
+- **PWA** — Installable web app (`vite-plugin-pwa`): **Add to Home Screen** on iOS Safari, install prompt on Chromium; static assets cached offline; **API and Socket.io are not cached** (always network)
 
 ---
 
@@ -31,7 +32,7 @@ Browser client for **Splendor Online**: auth, lobby, public rooms, live multipla
 | Layer | Technologies |
 |--------|----------------|
 | **UI** | React 19, React DOM |
-| **Build** | Vite 6, `@vitejs/plugin-react` |
+| **Build** | Vite 6, `@vitejs/plugin-react`, `vite-plugin-pwa` |
 | **Styling** | Tailwind CSS v4, `@tailwindcss/vite` |
 | **Motion** | Framer Motion |
 | **Icons** | Lucide React |
@@ -71,6 +72,23 @@ npm run preview
 
 ---
 
+## PWA (install / Add to Home Screen)
+
+Production builds emit a **web app manifest** (`site.webmanifest`) and a **service worker** that precaches static assets. Multiplayer still requires network access for REST and Socket.io (those routes are excluded from offline navigation fallbacks and use `NetworkOnly` caching).
+
+**Requirements**
+
+- **HTTPS** in production (or `http://localhost` for development). Browsers will not treat the app as installable on plain HTTP except on localhost.
+- After `npm run build`, test with `npm run preview` and open DevTools → **Application** → Manifest / Service Workers.
+
+**iPhone / iPad (Safari)** — open the site → **Share** (□↑) → **Add to Home Screen**.
+
+**Android (Chrome)** — menu → **Install app** / **Add to Home screen** when offered.
+
+**Desktop (Chrome / Edge)** — look for the install icon in the address bar, or Settings → **Install Splendor…**.
+
+---
+
 ## Environment variables
 
 Create an optional **`front-end/.env`** for local development when the API is not on the same origin as the Vite dev server.
@@ -107,7 +125,7 @@ front-end/
 │   ├── pages/              # Setup, lobby, game shells
 │   ├── utils/              # Game view helpers
 │   ├── App.tsx             # Auth → setup / lobby / game routing
-│   ├── main.tsx            # React root + GameAudioProvider
+│   ├── main.tsx            # React root, GameAudioProvider, PWA service worker registration
 │   └── index.css           # Global styles + Tailwind
 ├── index.html
 ├── package.json

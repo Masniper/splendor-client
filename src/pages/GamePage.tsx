@@ -109,10 +109,13 @@ export function GamePage(props: GamePageProps) {
 
   // Tick for timers rendered from expiresAt
   const [nowTick, setNowTick] = useState(() => Date.now());
+  const shouldRunReconnectTimers =
+    Boolean(pendingDisconnect) || (pendingDisconnects?.length ?? 0) > 1;
   useEffect(() => {
+    if (!shouldRunReconnectTimers) return;
     const id = window.setInterval(() => setNowTick(Date.now()), 1000);
     return () => window.clearInterval(id);
-  }, []);
+  }, [shouldRunReconnectTimers]);
 
   // Refs for auto-scrolling
   const scrollContainerRef = useRef<HTMLDivElement>(null);

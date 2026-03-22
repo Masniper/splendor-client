@@ -87,6 +87,14 @@ npm run preview
 
 ---
 
+## Docker
+
+The **multi-stage** `Dockerfile` runs `npm run build` (Node 20) and copies the `dist/` output into **nginx:alpine**. `nginx.docker.conf` proxies **`/api`**, **`/api-docs`**, and **`/socket.io/`** to the API service on the Compose network. Default Vite env (**same-origin** `/api` and browser origin for Socket.io) matches this layout—no extra `VITE_*` build args are required for the bundled stack.
+
+Build context is trimmed via `.dockerignore`. Compose entrypoint: parent [**splendor-app**](https://github.com/Masniper/splendor-app) `docker-compose.yml`.
+
+---
+
 ## PWA (install / Add to Home Screen)
 
 Production builds emit a **web app manifest** (`site.webmanifest`) and a **service worker** that precaches static assets. Multiplayer still requires network access for REST and Socket.io (those routes are excluded from offline navigation fallbacks and use `NetworkOnly` caching).

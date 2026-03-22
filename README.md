@@ -1,12 +1,15 @@
 # Splendor — Frontend (React + Vite)
 
+[![Repo](https://img.shields.io/badge/GitHub-splendor--client-181717?logo=github)](https://github.com/Masniper/splendor-client)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-06B6D4?logo=tailwindcss&logoColor=white)
-![License](https://img.shields.io/badge/license-Private-red)
+![License](https://img.shields.io/badge/license-MIT-green)
 
 Browser client for **Splendor Online**: auth, lobby, public rooms, live multiplayer via **Socket.io**, room chat, procedural **Web Audio** SFX, and a responsive board UI built with **React 19**, **Vite**, and **Tailwind CSS v4**.
+
+This repository is **[Masniper/splendor-client](https://github.com/Masniper/splendor-client)**. It is also vendored as the **`front-end/`** submodule inside the parent app **[Masniper/splendor-app](https://github.com/Masniper/splendor-app)**.
 
 ---
 
@@ -27,7 +30,7 @@ Browser client for **Splendor Online**: auth, lobby, public rooms, live multipla
 
 ---
 
-## Tech Stack
+## Tech stack
 
 | Layer | Technologies |
 |--------|----------------|
@@ -45,14 +48,26 @@ Browser client for **Splendor Online**: auth, lobby, public rooms, live multipla
 ## Prerequisites
 
 - **Node.js** ≥ 18
-- **Backend** — API + Socket.io server running; default in dev [`http://localhost:5001`](http://localhost:5001) — see [back-end README](../back-end/README.md)
+- **Backend** — REST + Socket.io server; local dev default **`http://localhost:5001`**. Use **[splendor-server](https://github.com/Masniper/splendor-server)** ([README](https://github.com/Masniper/splendor-server#readme)).
 
 ---
 
-## Installation & Local Setup
+## Installation & local setup
+
+### Clone (standalone)
 
 ```bash
-cd front-end
+git clone https://github.com/Masniper/splendor-client.git
+cd splendor-client
+npm install
+npm run dev
+```
+
+### Clone as part of the full stack
+
+```bash
+git clone --recurse-submodules https://github.com/Masniper/splendor-app.git
+cd splendor-app/front-end
 npm install
 npm run dev
 ```
@@ -91,7 +106,7 @@ Production builds emit a **web app manifest** (`site.webmanifest`) and a **servi
 
 ## Environment variables
 
-Create an optional **`front-end/.env`** for local development when the API is not on the same origin as the Vite dev server.
+Create an optional **`.env`** in this directory for local development when the API is not on the same origin as the Vite dev server.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
@@ -112,7 +127,7 @@ VITE_SOCKET_URL=http://localhost:5001
 ## Project structure
 
 ```
-front-end/
+splendor-client/   # or splendor-app/front-end/
 ├── public/                 # Static assets (e.g. background images)
 ├── src/
 │   ├── audio/              # Procedural Web Audio SFX (gameAudio.ts)
@@ -142,17 +157,17 @@ The UI expects:
 - **REST** — Same-origin **`/api`** in production, or `VITE_API_BASE_URL` in dev
 - **WebSocket** — Socket.io on the same host as configured by `VITE_SOCKET_URL` / default origin
 
-OpenAPI documentation for HTTP routes: **`http://localhost:5001/api-docs`** (served by the backend in local dev).
+OpenAPI documentation for HTTP routes (served by the backend): **`http://localhost:5001/api-docs`** in typical local dev.
 
 ---
 
 ## License
 
-This package is **private** (`"private": true` in `package.json`). Add or replace with a public license if you open-source the project.
+This project is licensed under the **MIT License** — see [`LICENSE`](./LICENSE).
 
 ---
 
 ## Related
 
-- **Workspace overview** — [../README.md](../README.md)
-- **Backend** — [../back-end/README.md](../back-end/README.md) for env vars, Prisma, and room chat socket events.
+- **Full stack (parent + submodules)** — [Masniper/splendor-app](https://github.com/Masniper/splendor-app)
+- **Backend API** — [Masniper/splendor-server](https://github.com/Masniper/splendor-server)

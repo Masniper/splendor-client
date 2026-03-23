@@ -7,10 +7,16 @@ import { HowToPlayModal } from "../components/HowToPlayModal";
 import { NobleTile } from "../components/NobleTile";
 import { OpponentProfileModal } from "../components/OpponentProfileModal";
 import { PlayerDashboard } from "../components/PlayerDashboard";
-import { gemIconSrc, gemStyles, gemStylesBank } from "../constants";
 import { GameState, GemColor } from "../game/models";
 import { useOpponentProfile } from "../hooks/useOpponentProfile";
+import { DiscardTokenPicker } from "../components/DiscardTokenPicker";
 import { RoomChatPanel } from "../components/RoomChatPanel";
+import {
+  TokenFlightOverlay,
+  type TokenFlightItem,
+} from "../components/TokenFlightOverlay";
+import { CardFlightOverlay } from "../components/CardFlightOverlay";
+import type { CardFlightVisual } from "../utils/cardFlight";
 import { useGameAudio } from "../context/GameAudioContext";
 
 type PendingDiscardAction =
@@ -59,6 +65,15 @@ type GamePageProps = {
   onReconnectToRoom: (roomCode: string) => void;
   onExitAfterDisconnect: () => void;
 
+  /** Bank → player token flight; driven by `game:tokensTaken` for all clients */
+  tokenFlightVisual: { items: TokenFlightItem[]; sizePx: number } | null;
+
+  /** Board / deck / reserved → player area; driven by `game:cardMoved` */
+  cardFlightVisual: CardFlightVisual | null;
+
+  /** True while any card animation (flight + refill) is running — blocks board interactions. */
+  boardAnimating: boolean;
+
   actions: {
     sendAction: (action: any) => void;
     requestRematch: () => void;
@@ -85,6 +100,9 @@ export function GamePage(props: GamePageProps) {
     pendingDisconnects,
     onReconnectToRoom,
     onExitAfterDisconnect,
+    tokenFlightVisual,
+    cardFlightVisual,
+    boardAnimating,
     actions,
   } = props;
 
@@ -152,8 +170,11 @@ export function GamePage(props: GamePageProps) {
     currentPlayer?.name,
   ]);
 
-  // Auto-scroll to current player when turn changes
+  // Auto-scroll to current player when turn changes.
+  // Deferred until boardAnimating is false so the scroll doesn't fire
+  // mid-card-animation (which would jolt the view while the refill is playing).
   useEffect(() => {
+    if (boardAnimating) return;
     if (scrollContainerRef.current) {
       const activePlayerElement =
         playerRefs.current[gameState.currentPlayerIndex];
@@ -165,7 +186,7 @@ export function GamePage(props: GamePageProps) {
         });
       }
     }
-  }, [gameState.currentPlayerIndex]);
+  }, [gameState.currentPlayerIndex, boardAnimating]);
 
   const formatMs = (ms: number) => {
     const totalSeconds = Math.ceil(ms / 1000);
@@ -302,7 +323,10 @@ export function GamePage(props: GamePageProps) {
         play("discard");
         actions.sendAction({
           type: "TAKE_TOKENS",
-          payload: { tokens: pendingDiscardAction.tokens, discardTokens: discardSelection },
+          payload: {
+            tokens: pendingDiscardAction.tokens,
+            discardTokens: discardSelection,
+          },
         });
         setSelectedTokens([]);
       } else if (pendingDiscardAction.type === "RESERVE_CARD") {
@@ -334,6 +358,23 @@ export function GamePage(props: GamePageProps) {
 
   return (
     <div className="relative min-h-screen">
+      {tokenFlightVisual && (
+        <TokenFlightOverlay
+          items={tokenFlightVisual.items}
+          tokenSizePx={tokenFlightVisual.sizePx}
+        />
+      )}
+      {cardFlightVisual && (
+        <CardFlightOverlay
+          visual={cardFlightVisual}
+          cardWidthPx={
+            typeof window !== "undefined" &&
+            window.matchMedia("(min-width: 640px)").matches
+              ? 72
+              : 52
+          }
+        />
+      )}
       {/* Fixed layer: avoids `background-attachment: fixed` on the scrolling root (very costly on mobile). */}
       <div
         aria-hidden
@@ -599,42 +640,15 @@ export function GamePage(props: GamePageProps) {
                 )}
               </p>
 
-              <div className="flex flex-wrap justify-center gap-3 sm:gap-4 mb-10">
-                {(Object.keys(gemStyles) as GemColor[]).map((color) => {
-                  const amount = availableTokens[color] || 0;
-                  const discardedCount = discardSelection.filter((c) => c === color).length;
-                  const style = gemStylesBank[color];
-                  return (
-                    <motion.button
-                      key={color}
-                      whileHover={{ scale: amount > 0 ? 1.1 : 1 }}
-                      whileTap={{ scale: amount > 0 ? 0.9 : 1 }}
-                      onClick={() => amount > 0 && toggleDiscardSelection(color)}
-                      disabled={amount === 0 || discardedCount >= amount}
-                      className={`w-12 h-12 sm:w-16 sm:h-16 rounded-full border-4 flex items-center justify-center text-xl sm:text-2xl font-bold shadow-lg transition-all relative font-sans drop-shadow-md
-                        ${style.chip} ${
-                          amount === 0 || discardedCount >= amount
-                            ? "opacity-30 cursor-not-allowed"
-                            : "hover:shadow-xl cursor-pointer"
-                        }
-                      `}
-                    >
-                      <img
-                        src={gemIconSrc[color]}
-                        alt={color}
-                        className="pointer-events-none w-10 h-10 sm:w-12 sm:h-12 object-contain"
-                      />
-                      <span className="absolute  text-lg  font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
-                        {amount - discardedCount}
-                      </span>
-                      {discardedCount > 0 && (
-                        <span className="absolute -top-2 -right-2 w-5 h-5 sm:w-6 sm:h-6 bg-red-500 rounded-full text-[10px] sm:text-xs flex items-center justify-center text-white border-2 border-zinc-900 shadow-md">
-                          -{discardedCount}
-                        </span>
-                      )}
-                    </motion.button>
-                  );
-                })}
+              <div className="mb-10">
+                <DiscardTokenPicker
+                  holdings={
+                    getAvailableOwnedTokens() as Record<GemColor, number>
+                  }
+                  discardSelection={discardSelection}
+                  onToggle={toggleDiscardSelection}
+                  isDark={isDark}
+                />
               </div>
 
               <div className="flex flex-col sm:flex-row justify-center gap-4">
@@ -790,7 +804,7 @@ export function GamePage(props: GamePageProps) {
 
             <div
               ref={scrollContainerRef}
-              className="flex-1 flex flex-row lg:flex-col gap-3 lg:gap-4 overflow-x-auto lg:overflow-x-hidden lg:overflow-y-auto max-h-none lg:max-h-screen py-4 px-1 lg:py-5 lg:px-1 snap-x snap-mandatory hide-scrollbar"
+              className="flex-1 flex flex-row lg:flex-col gap-3 lg:gap-4 overflow-x-auto lg:overflow-x-hidden lg:overflow-y-auto py-4 px-1 lg:py-5 lg:px-1 snap-x snap-mandatory hide-scrollbar"
             >
               {players.map((player, idx) => (
                 <div
@@ -839,6 +853,9 @@ export function GamePage(props: GamePageProps) {
             onReserveCard={handleReserveCard}
             onReserveFromDeck={handleReserveFromDeck}
             isDark={isDark}
+            tokenInteractionDisabled={Boolean(
+              tokenFlightVisual || cardFlightVisual || boardAnimating,
+            )}
           />
         </div>
       </div>

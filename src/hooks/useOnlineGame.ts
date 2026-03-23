@@ -1,7 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GameSoundId } from "../audio/gameAudio";
+import type { TokenFlightItem } from "../components/TokenFlightOverlay";
 import { socket } from "../network/socket";
 import { GameState, GemColor } from "../game/models";
+import {
+  applyOptimisticBankReceiveDiscard,
+  applyOptimisticDiscardLeavePlayer,
+  applyOptimisticTakeOnly,
+} from "../utils/optimisticGameState";
+import {
+  buildDiscardTokenFlights,
+  buildTakeTokenFlights,
+  tokenFlightTotalMs,
+} from "../utils/tokenFlight";
+import {
+  buildCardFlightVisual,
+  type CardFlightVisual,
+  type CardMovedSocketPayload,
+} from "../utils/cardFlight";
+import { CARD_FLIGHT_DURATION_MS } from "../components/CardFlightOverlay";
+import { BOARD_REFILL_DURATION_MS } from "../components/BoardRefillFlightOverlay";
 
 type Toast = { message: string; type: "error" | "success" };
 
@@ -105,6 +123,43 @@ export function useOnlineGame({
   const [publicRooms, setPublicRooms] = useState<PublicRoomRow[]>([]);
   const [isLoadingPublicRooms, setIsLoadingPublicRooms] = useState(false);
 
+  const [tokenFlightVisual, setTokenFlightVisual] = useState<{
+    items: TokenFlightItem[];
+    sizePx: number;
+  } | null>(null);
+  const tokenFlightTimerRef = useRef<number | null>(null);
+
+  const [cardFlightVisual, setCardFlightVisual] =
+    useState<CardFlightVisual | null>(null);
+  const cardFlightTimerRef = useRef<number | null>(null);
+  /** Direct DOM ref to hide source card immediately (no React cycle delay). */
+  const hiddenSourceElRef = useRef<HTMLElement | null>(null);
+
+  /**
+   * True from when a card starts flying until the board-refill animation finishes.
+   * Used to block interactions and delay the "your turn" audio cue.
+   */
+  const [boardAnimating, setBoardAnimating] = useState(false);
+  const boardAnimTimerRef = useRef<number | null>(null);
+  /** Set to true in handleCardMoved, cleared in handleGameUpdated after refill. */
+  const cardMoveInFlightRef = useRef(false);
+  /** Always holds the latest game state for synchronous reads inside event handlers. */
+  const latestGameStateRef = useRef<GameState | null>(null);
+
+  const clearTokenFlightTimer = useCallback(() => {
+    if (tokenFlightTimerRef.current != null) {
+      window.clearTimeout(tokenFlightTimerRef.current);
+      tokenFlightTimerRef.current = null;
+    }
+  }, []);
+
+  const clearCardFlightTimer = useCallback(() => {
+    if (cardFlightTimerRef.current != null) {
+      window.clearTimeout(cardFlightTimerRef.current);
+      cardFlightTimerRef.current = null;
+    }
+  }, []);
+
   const showError = useCallback(
     (message: string) => onToast({ message, type: "error" }),
     [onToast],
@@ -185,24 +240,178 @@ export function useOnlineGame({
       setRoomCode((prev) => prev ?? room.id);
     };
 
-    const handleGameUpdated = (payload: { gameState: GameState }) => {
-      console.log("[Frontend] Game updated:", payload.gameState);
-      setGameState((prevState) => {
-        const next = payload.gameState;
-        if (prevState && localPlayerName) {
-          const prevIdx = prevState.currentPlayerIndex;
-          const nextIdx = next.currentPlayerIndex;
-          const nextCurrentName = next.players[nextIdx]?.name;
-          if (
-            prevIdx !== nextIdx &&
-            nextCurrentName === localPlayerName &&
-            !next.winner
-          ) {
-            queueMicrotask(() => playRef.current?.("yourTurn"));
-          }
+    const handleTokensTaken = (payload: {
+      playerId?: string;
+      tokens?: GemColor[];
+      discardTokens?: GemColor[];
+    }) => {
+      if (typeof document === "undefined") return;
+      const playerId = payload?.playerId;
+      if (!playerId) return;
+      const take = payload?.tokens ?? [];
+      const discard = payload?.discardTokens ?? [];
+      if (take.length === 0 && discard.length === 0) return;
+
+      const sizePx = window.matchMedia("(min-width: 640px)").matches
+        ? 52
+        : 36;
+
+      const runDiscardFlight = () => {
+        if (discard.length === 0) {
+          tokenFlightTimerRef.current = null;
+          return;
         }
-        return next;
-      });
+        const dItems = buildDiscardTokenFlights(discard, playerId);
+        if (!dItems?.length) {
+          tokenFlightTimerRef.current = null;
+          return;
+        }
+        setGameState((prev) =>
+          prev ? applyOptimisticDiscardLeavePlayer(prev, playerId, discard) : prev,
+        );
+        setTokenFlightVisual({ items: dItems, sizePx });
+        tokenFlightTimerRef.current = window.setTimeout(() => {
+          setTokenFlightVisual(null);
+          tokenFlightTimerRef.current = null;
+          setGameState((prev) =>
+            prev ? applyOptimisticBankReceiveDiscard(prev, discard) : prev,
+          );
+        }, tokenFlightTotalMs(discard.length));
+      };
+
+      clearTokenFlightTimer();
+
+      if (take.length > 0) {
+        const takeItems = buildTakeTokenFlights(take, playerId);
+        if (!takeItems?.length) {
+          runDiscardFlight();
+          return;
+        }
+        setGameState((prev) =>
+          prev ? applyOptimisticTakeOnly(prev, playerId, take) : prev,
+        );
+        setTokenFlightVisual({ items: takeItems, sizePx });
+        tokenFlightTimerRef.current = window.setTimeout(() => {
+          tokenFlightTimerRef.current = null;
+          setTokenFlightVisual(null);
+          runDiscardFlight();
+        }, tokenFlightTotalMs(take.length));
+      } else {
+        runDiscardFlight();
+      }
+    };
+
+    const handleTokensDiscarded = (payload: {
+      playerId?: string;
+      tokens?: GemColor[];
+    }) => {
+      if (typeof document === "undefined") return;
+      const playerId = payload?.playerId;
+      const tokens = payload?.tokens;
+      if (!playerId || !Array.isArray(tokens) || tokens.length === 0) return;
+      const items = buildDiscardTokenFlights(tokens, playerId);
+      if (!items?.length) return;
+      const sizePx = window.matchMedia("(min-width: 640px)").matches
+        ? 52
+        : 36;
+      clearTokenFlightTimer();
+      setGameState((prev) =>
+        prev ? applyOptimisticDiscardLeavePlayer(prev, playerId, tokens) : prev,
+      );
+      setTokenFlightVisual({ items, sizePx });
+      tokenFlightTimerRef.current = window.setTimeout(() => {
+        setTokenFlightVisual(null);
+        tokenFlightTimerRef.current = null;
+        setGameState((prev) =>
+          prev ? applyOptimisticBankReceiveDiscard(prev, tokens) : prev,
+        );
+      }, tokenFlightTotalMs(items.length));
+    };
+
+    const handleCardMoved = (payload: CardMovedSocketPayload) => {
+      if (typeof document === "undefined") return;
+      cardMoveInFlightRef.current = true;
+      setBoardAnimating(true);
+
+      // Immediately hide source in the DOM — before React has a chance to paint —
+      // so the flying overlay is the only visible copy (no duplicate/ghost).
+      if (payload.source === "board") {
+        const el = document.querySelector<HTMLElement>(
+          `[data-board-card="${payload.cardId}"]`,
+        );
+        if (el) {
+          el.style.visibility = "hidden";
+          hiddenSourceElRef.current = el;
+        }
+      } else if (payload.source === "reserved") {
+        const el = document.querySelector<HTMLElement>(
+          `[data-reserved-card="${payload.cardId}"]`,
+        );
+        if (el) {
+          el.style.visibility = "hidden";
+          hiddenSourceElRef.current = el;
+        }
+      }
+
+      const v = buildCardFlightVisual(payload);
+      if (!v) {
+        // Restore if we can't build the flight (shouldn't happen but be safe)
+        if (hiddenSourceElRef.current) {
+          hiddenSourceElRef.current.style.visibility = "";
+          hiddenSourceElRef.current = null;
+        }
+        return;
+      }
+      clearCardFlightTimer();
+      setCardFlightVisual(v);
+      // Fallback if game:updated is lost; server uses ~CARD_MOVE_MS+120 after cardMoved.
+      cardFlightTimerRef.current = window.setTimeout(() => {
+        setCardFlightVisual(null);
+        cardFlightTimerRef.current = null;
+        if (hiddenSourceElRef.current) {
+          hiddenSourceElRef.current.style.visibility = "";
+          hiddenSourceElRef.current = null;
+        }
+      }, CARD_FLIGHT_DURATION_MS + 800);
+    };
+
+    const handleGameUpdated = (payload: { gameState: GameState }) => {
+      clearCardFlightTimer();
+      setCardFlightVisual(null);
+      if (hiddenSourceElRef.current) {
+        hiddenSourceElRef.current.style.visibility = "";
+        hiddenSourceElRef.current = null;
+      }
+
+      const next = payload.gameState;
+      const wasCardMove = cardMoveInFlightRef.current;
+      cardMoveInFlightRef.current = false;
+
+      // Detect turn change synchronously before applying the new state
+      const prev = latestGameStateRef.current;
+      const isMyTurn =
+        prev != null &&
+        localPlayerName != null &&
+        prev.currentPlayerIndex !== next.currentPlayerIndex &&
+        next.players[next.currentPlayerIndex]?.name === localPlayerName &&
+        !next.winner;
+
+      setGameState(next);
+
+      if (wasCardMove) {
+        // Unlock board and fire "your turn" sound only after refill animation completes
+        if (boardAnimTimerRef.current != null) {
+          window.clearTimeout(boardAnimTimerRef.current);
+        }
+        boardAnimTimerRef.current = window.setTimeout(() => {
+          setBoardAnimating(false);
+          boardAnimTimerRef.current = null;
+          if (isMyTurn) playRef.current?.("yourTurn");
+        }, BOARD_REFILL_DURATION_MS + 200);
+      } else {
+        setBoardAnimating(false);
+        if (isMyTurn) queueMicrotask(() => playRef.current?.("yourTurn"));
+      }
     };
 
     const handleGameStarted = (payload: { gameState: GameState }) => {
@@ -390,6 +599,9 @@ export function useOnlineGame({
     socket.on("player:reconnected", handlePlayerReconnected);
     socket.on("player:timeout", handlePlayerTimeout);
     socket.on("error", handleSocketError);
+    socket.on("game:tokensTaken", handleTokensTaken);
+    socket.on("game:tokensDiscarded", handleTokensDiscarded);
+    socket.on("game:cardMoved", handleCardMoved);
     socket.on("game:updated", handleGameUpdated);
     socket.on("game:started", handleGameStarted);
     socket.on("game:error", handleGameError);
@@ -414,6 +626,9 @@ export function useOnlineGame({
       socket.off("player:reconnected", handlePlayerReconnected);
       socket.off("player:timeout", handlePlayerTimeout);
       socket.off("error", handleSocketError);
+      socket.off("game:tokensTaken", handleTokensTaken);
+      socket.off("game:tokensDiscarded", handleTokensDiscarded);
+      socket.off("game:cardMoved", handleCardMoved);
       socket.off("game:updated", handleGameUpdated);
       socket.off("game:started", handleGameStarted);
       socket.off("game:error", handleGameError);
@@ -421,7 +636,15 @@ export function useOnlineGame({
       socket.off("game:over", handleGameOver);
       socket.off("game:rematch:update", handleRematchUpdate);
     };
-  }, [authToken, showError, showSuccess, onToast, localPlayerName]);
+  }, [
+    authToken,
+    showError,
+    showSuccess,
+    onToast,
+    localPlayerName,
+    clearTokenFlightTimer,
+    clearCardFlightTimer,
+  ]);
 
   const createRoom = useCallback(
     (roomName: string, isPublic: boolean = true, betAmount: number = 0) => {
@@ -465,8 +688,12 @@ export function useOnlineGame({
       setRematchState(null);
       setGameOverInfo(null);
       setPendingDisconnects({}); // Clear all
+      clearTokenFlightTimer();
+      clearCardFlightTimer();
+      setTokenFlightVisual(null);
+      setCardFlightVisual(null);
     },
-    [roomCode, clearStoredSession],
+    [roomCode, clearStoredSession, clearTokenFlightTimer, clearCardFlightTimer],
   );
 
   const startGame = useCallback(() => {
@@ -648,6 +875,9 @@ export function useOnlineGame({
   const legacyPendingDisconnect =
     pendingDisconnectArray.length > 0 ? pendingDisconnectArray[0] : null;
 
+  // Keep latestGameStateRef in sync for synchronous reads inside socket handlers
+  latestGameStateRef.current = gameState;
+
   return {
     room,
     gameState,
@@ -657,6 +887,9 @@ export function useOnlineGame({
     pendingDisconnects: pendingDisconnectArray,
     publicRooms,
     isLoadingPublicRooms,
+    tokenFlightVisual,
+    cardFlightVisual,
+    boardAnimating,
     actions,
   };
 }

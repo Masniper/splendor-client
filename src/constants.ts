@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { GemColor } from './game/models';
 
 export const gemStyles: Record<GemColor, { chip: string; border: string }> = {
@@ -63,3 +64,35 @@ export const gemIconSrc: Record<GemColor, string> = {
   [GemColor.Ruby]: '/icons/ruby.png',
   [GemColor.Gold]: '/icons/gold.png',
 };
+
+/** BGA `tokens.png`: one row, six frames (E, C, S, O, R, G). */
+export const GEM_TOKEN_SPRITE_URL = '/images/tokens.png';
+
+const TOKEN_SPRITE_FRAMES = 6;
+
+/** Frame index matches BGA `.type_E` … `.type_G` order in the strip. */
+const gemColorSpriteFrame: Record<GemColor, number> = {
+  [GemColor.Emerald]: 0,
+  [GemColor.Diamond]: 1,
+  [GemColor.Sapphire]: 2,
+  [GemColor.Onyx]: 3,
+  [GemColor.Ruby]: 4,
+  [GemColor.Gold]: 5,
+};
+
+/**
+ * Same geometry as BGA: square box `S×S`, `background-size: 600% 100%` → painted size `(6S)×S`,
+ * each frame exactly `S` wide so nothing is clipped. Pixel math avoids `%` bugs.
+ */
+export function gemTokenSpriteStyle(color: GemColor, sizePx: number): CSSProperties {
+  const frame = gemColorSpriteFrame[color];
+  const bgW = TOKEN_SPRITE_FRAMES * sizePx;
+  return {
+    width: sizePx,
+    height: sizePx,
+    backgroundImage: `url(${GEM_TOKEN_SPRITE_URL})`,
+    backgroundSize: `${bgW}px ${sizePx}px`,
+    backgroundPosition: `${-frame * sizePx}px 0`,
+    backgroundRepeat: 'no-repeat',
+  };
+}

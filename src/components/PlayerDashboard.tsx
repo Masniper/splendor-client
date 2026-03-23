@@ -84,6 +84,7 @@ export const PlayerDashboard = ({ player, isActive, isCurrentPlayer, turnPhase, 
             return (
               <div 
                 key={color} 
+                data-token-landmark={`${player.id}:${color}`}
                 className={`flex flex-col items-center gap-1 transition-all ${isEmpty ? 'opacity-30 saturate-75 brightness-90' : 'opacity-100'}`}
               >
                 <div className={`w-8 h-8 rounded-full ${style.chip} border-2 flex items-center justify-center text-xs font-bold shadow-sm font-sans relative`}>
@@ -102,8 +103,13 @@ export const PlayerDashboard = ({ player, isActive, isCurrentPlayer, turnPhase, 
         </div>
       </div>
 
-      {/* 3. Bonuses Section (The Engine) */}
-      <div className="mb-4">
+      {/* 3. Bonuses Section (The Engine) — purchase flight lands here */}
+      <div className="mb-4 relative">
+        <div
+          data-card-dest={`${player.id}:purchase`}
+          className="pointer-events-none absolute inset-0 z-0"
+          aria-hidden
+        />
         <div className={`text-[10px] uppercase tracking-widest mb-2 font-bold font-sans ${isDark ? 'text-stone-500' : 'text-gray-500'}`}>
           Bonuses (Engine)
         </div>
@@ -156,15 +162,24 @@ export const PlayerDashboard = ({ player, isActive, isCurrentPlayer, turnPhase, 
         </div>
       )}
 
-      {/* 5. Reserved Cards Section */}
-      {player.reservedCards.length > 0 && (
-        <div className={`mt-auto pt-3 border-t ${isDark ? 'border-zinc-700' : 'border-gray-200'}`}>
-          <div className={`text-[10px] uppercase tracking-wider mb-2 font-semibold font-sans ${isDark ? 'text-stone-500' : 'text-gray-500'}`}>
-            Reserved ({player.reservedCards.length}/3)
-          </div>
+      {/* 5. Reserved Cards Section — reserve flight lands here */}
+      <div className={`mt-auto pt-3 border-t relative ${isDark ? 'border-zinc-700' : 'border-gray-200'}`}>
+        <div
+          data-card-dest={`${player.id}:reserve`}
+          className="pointer-events-none absolute left-1/2 top-10 -translate-x-1/2 w-28 h-36 z-0 sm:h-40"
+          aria-hidden
+        />
+        <div className={`text-[10px] uppercase tracking-wider mb-2 font-semibold font-sans ${isDark ? 'text-stone-500' : 'text-gray-500'}`}>
+          Reserved ({player.reservedCards.length}/3)
+        </div>
+        {player.reservedCards.length > 0 && (
           <div className="grid grid-cols-3 gap-3 justify-items-center items-center">
             {player.reservedCards.map(card => (
-              <div key={card.id} className="w-full flex justify-center">
+              <div
+                key={card.id}
+                data-reserved-card={card.id}
+                className="w-full flex justify-center"
+              >
                 <DevelopmentCard 
                   card={card}
                   affordable={canAffordCard(player, card)}
@@ -175,8 +190,8 @@ export const PlayerDashboard = ({ player, isActive, isCurrentPlayer, turnPhase, 
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

@@ -121,6 +121,9 @@ export default function App() {
     pendingDisconnects,
     publicRooms,
     isLoadingPublicRooms,
+    tokenFlightVisual,
+    cardFlightVisual,
+    boardAnimating,
     actions,
   } = useOnlineGame({
     authToken,
@@ -386,6 +389,9 @@ export default function App() {
         pendingDisconnects={pendingDisconnects}
         onReconnectToRoom={(code) => actions.reconnectToRoom(code)}
         onExitAfterDisconnect={() => handleLogout({ keepReconnectRoom: false, leaveRoom: true })}
+        tokenFlightVisual={tokenFlightVisual}
+        cardFlightVisual={cardFlightVisual}
+        boardAnimating={boardAnimating}
         actions={{
           sendAction: actions.sendAction,
           requestRematch: actions.requestRematch,

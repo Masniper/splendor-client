@@ -1,13 +1,28 @@
-import { useEffect, useState } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ForwardedRef,
+} from 'react';
 import { motion } from 'framer-motion';
 import { DevelopmentCard as IDevelopmentCard, GemColor, TurnPhase } from '../game/models';
-import { gemStyles, gemIconSrc } from '../constants';
 import {
   cardImageFallback,
   cardImageSrc,
-  deckTextureFallback,
-  deckTextureSrc,
 } from '../utils/cardAssets';
+import { useElementSize } from '../hooks/useElementSize';
+import {
+  cardCostCircleStyle,
+  cardDeckBackStyle,
+  cardSheetFaceStyle,
+  costMinigemStyle,
+  gemBonusHeaderStyle,
+  numbersSheetDigitStyle,
+  parseCardSheetIndex1Based,
+  prestigePointsSpriteStyle,
+} from '../utils/splendorSprites';
 
 function CardFaceImage({ cardId }: { cardId: string }) {
   const [src, setSrc] = useState(() => cardImageSrc(cardId));
@@ -32,34 +47,6 @@ function CardFaceImage({ cardId }: { cardId: string }) {
   );
 }
 
-function DeckTexture({ isDark }: { isDark: boolean }) {
-  const [useCdn, setUseCdn] = useState(false);
-
-  useEffect(() => {
-    setUseCdn(false);
-  }, [isDark]);
-
-  const url = useCdn ? deckTextureFallback(isDark) : deckTextureSrc(isDark);
-
-  return (
-    <>
-      <img
-        src={deckTextureSrc(isDark)}
-        alt=""
-        className="hidden"
-        onError={() => setUseCdn(true)}
-      />
-      <div
-        className="absolute inset-0 opacity-50"
-        style={{
-          backgroundImage: `url(${url})`,
-          backgroundRepeat: 'repeat',
-        }}
-      />
-    </>
-  );
-}
-
 interface CardProps {
   card: IDevelopmentCard;
   onBuy?: () => void;
@@ -67,11 +54,23 @@ interface CardProps {
   affordable: boolean;
   turnPhase: TurnPhase;
   isReserved?: boolean;
+  /** Skip mount fade/slide (e.g. after deck→slot refill animation). */
+  skipEntranceAnimation?: boolean;
 }
 
 export const DevelopmentCard = (props: CardProps) => {
-  const { card, onBuy, onReserve, affordable, turnPhase, isReserved = false } = props;
+  const {
+    card,
+    onBuy,
+    onReserve,
+    affordable,
+    turnPhase,
+    isReserved = false,
+    skipEntranceAnimation = false,
+  } = props;
   const [showMenu, setShowMenu] = useState(false);
+  const cardBoxRef = useRef<HTMLDivElement>(null);
+  const { width: cardBoxW, height: cardBoxH } = useElementSize(cardBoxRef);
 
   const levelBorders = {
     1: 'border-emerald-700',
@@ -85,11 +84,14 @@ export const DevelopmentCard = (props: CardProps) => {
     setShowMenu(!showMenu);
   };
 
+  const cardSheetIndex = parseCardSheetIndex1Based(card.id);
+
   return (
     <motion.div 
+      ref={cardBoxRef}
       onClick={handleCardClick}
       onMouseLeave={() => setShowMenu(false)}
-      initial={{ opacity: 0, y: 20 }}
+      initial={skipEntranceAnimation ? false : { opacity: 0, y: 20 }}
       animate={isPurchasable ? { 
         opacity: 1, 
         y: 0,
@@ -99,37 +101,86 @@ export const DevelopmentCard = (props: CardProps) => {
       whileHover={{ scale: 1.03, y: -3 }}
       className={`w-full min-w-[70px] max-w-[85px] sm:min-w-[90px] sm:max-w-[130px] lg:max-w-[160px] lg:min-w-[120px] aspect-[2/3] shrink-0 rounded-xl border-2 ${levelBorders[card.level]} p-0 flex flex-col justify-between shadow-md relative group overflow-hidden transition-shadow cursor-pointer ${isPurchasable ? 'shadow-[0_0_15px_rgba(255,255,255,0.6)]' : ''}`}
     >
-      <CardFaceImage cardId={card.id} />
-      <div className="relative z-10 bg-white/30 backdrop-blur-md p-1 sm:p-1.5 flex justify-between items-start border-b border-white/20 rounded-t-xl">
-        <div className="rounded-md px-1 py-0 min-w-[1rem] sm:min-w-[1.2rem] lg:min-w-[1.5rem] text-center">
-          <span className="text-sm sm:text-lg lg:text-2xl font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,1)] font-serif">
-            {card.prestigePoints > 0 ? card.prestigePoints : ''}
-          </span>
-        </div>
-        <img
-          src={gemIconSrc[card.colorBonus]}
-          alt={card.colorBonus}
-          className="object-contain w-6 h-6 sm:w-10 sm:h-10 lg:w-12 lg:h-12 drop-shadow-[0_2px_2px_rgba(0,0,0,1)]"
+      {cardSheetIndex != null ? (
+        <div
+          className="pointer-events-none absolute inset-0 z-0"
+          style={cardSheetFaceStyle(
+            card.colorBonus,
+            cardSheetIndex,
+            cardBoxW,
+            cardBoxH,
+          )}
         />
+      ) : (
+        <CardFaceImage cardId={card.id} />
+      )}
+      <div className="relative z-10 bg-white/30 backdrop-blur-md p-1 sm:p-1.5 flex justify-between items-start border-b border-white/20 rounded-t-xl">
+        <div className="flex shrink-0 items-start justify-center">
+          {card.prestigePoints > 0 &&
+            (() => {
+              const vpSm = prestigePointsSpriteStyle(card.prestigePoints, 18);
+              const vpMd = prestigePointsSpriteStyle(card.prestigePoints, 26);
+              const vpLg = prestigePointsSpriteStyle(card.prestigePoints, 34);
+              if (vpSm) {
+                return (
+                  <>
+                    <span
+                      className="drop-shadow-[0_2px_2px_rgba(0,0,0,1)] sm:hidden"
+                      style={vpSm}
+                    />
+                    <span
+                      className="drop-shadow-[0_2px_2px_rgba(0,0,0,1)] hidden sm:inline-block lg:hidden"
+                      style={vpMd}
+                    />
+                    <span
+                      className="drop-shadow-[0_2px_2px_rgba(0,0,0,1)] hidden lg:inline-block"
+                      style={vpLg}
+                    />
+                  </>
+                );
+              }
+              return (
+                <span className="min-w-[1rem] text-center text-sm font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,1)] sm:min-w-[1.2rem] sm:text-lg lg:min-w-[1.5rem] lg:text-2xl">
+                  {card.prestigePoints}
+                </span>
+              );
+            })()}
+        </div>
+        <div className="flex shrink-0 flex-col items-end">
+          <span className="drop-shadow-[0_2px_2px_rgba(0,0,0,1)] sm:hidden" style={gemBonusHeaderStyle(card.colorBonus, 24)} />
+          <span className="drop-shadow-[0_2px_2px_rgba(0,0,0,1)] hidden sm:inline-block lg:hidden" style={gemBonusHeaderStyle(card.colorBonus, 40)} />
+          <span className="drop-shadow-[0_2px_2px_rgba(0,0,0,1)] hidden lg:inline-block" style={gemBonusHeaderStyle(card.colorBonus, 48)} />
+        </div>
       </div>
 
-      <div className="relative z-10 flex flex-col gap-0.5 sm:gap-1 p-1 sm:p-1.5 w-fit mt-auto mb-1">
+      <div className="relative z-10 mt-auto mb-1 flex w-fit flex-col gap-0.5 p-1 sm:gap-1 sm:p-1.5">
         {(Object.keys(card.cost) as GemColor[]).map((color) => {
           const amount = card.cost[color];
-          if (!amount) return null;
-          const cStyle = gemStyles[color];
+          if (!amount || color === GemColor.Gold) return null;
+          const gem = color as Exclude<GemColor, GemColor.Gold>;
+          const costSm = 16;
+          const costMd = 26;
+          const costLg = 30;
+          const digitSm = numbersSheetDigitStyle(amount, costSm);
+          const digitMd = numbersSheetDigitStyle(amount, costMd);
+          const digitLg = numbersSheetDigitStyle(amount, costLg);
           return (
             <div key={color} className="flex items-center">
-              <div 
-                className={`w-4.5 h-3.5 sm:w-7 sm:h-7 lg:w-6 lg:h-6 rounded-full ${cStyle.chip} border border-white/50 sm:border-2 flex items-center justify-center text-[8px] sm:text-[10px] lg:text-sm font-black font-sans drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]`}
-              >
-                {amount}
+              <div className="relative shrink-0 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] sm:hidden" style={{ width: costSm, height: costSm }}>
+                <div className="pointer-events-none absolute inset-0" style={cardCostCircleStyle(gem, costSm)} />
+                {digitSm && <div className="pointer-events-none absolute inset-0" style={digitSm} />}
+                <div style={costMinigemStyle(gem, costSm, 'card')} />
               </div>
-              <img
-                src={gemIconSrc[color]}
-                alt={color}
-                className="w-3.5 h-3.5 sm:w-7 sm:h-7 lg:w-6 lg:h-6 object-contain -ml-1 sm:-ml-2 lg:-ml-2.5 z-10"
-              />
+              <div className="relative hidden shrink-0 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] sm:block lg:hidden" style={{ width: costMd, height: costMd }}>
+                <div className="pointer-events-none absolute inset-0" style={cardCostCircleStyle(gem, costMd)} />
+                {digitMd && <div className="pointer-events-none absolute inset-0" style={digitMd} />}
+                <div style={costMinigemStyle(gem, costMd, 'card')} />
+              </div>
+              <div className="relative hidden shrink-0 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] lg:block" style={{ width: costLg, height: costLg }}>
+                <div className="pointer-events-none absolute inset-0" style={cardCostCircleStyle(gem, costLg)} />
+                {digitLg && <div className="pointer-events-none absolute inset-0" style={digitLg} />}
+                <div style={costMinigemStyle(gem, costLg, 'card')} />
+              </div>
             </div>
           );
         })}
@@ -168,34 +219,47 @@ interface DeckProps {
   count: number;
   onReserve: () => void;
   turnPhase: TurnPhase;
-  isDark: boolean;
-
 }
 
-export const Deck = (props: DeckProps) => {
-  const { level, count, onReserve, turnPhase, isDark } = props;
-  const [showMenu, setShowMenu] = useState(false);
+function assignRef<T>(ref: ForwardedRef<T>, node: T | null) {
+  if (typeof ref === 'function') ref(node);
+  else if (ref) ref.current = node;
+}
 
-  const bgColors = {
-    1: 'bg-emerald-700',
-    2: 'bg-amber-600',
-    3: 'bg-blue-700'
-  };
-  const dots = Array.from({ length: level });
+/**
+ * Face-down deck stack — ref attaches to the outer box (same element as `data-deck-level`).
+ * Used as the exact origin for board refill flights (deck → empty slot).
+ */
+export const Deck = forwardRef<HTMLDivElement, DeckProps>(function Deck(
+  { level, count, onReserve, turnPhase },
+  ref,
+) {
+  const [showMenu, setShowMenu] = useState(false);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const { width: dw, height: dh } = useElementSize(innerRef);
+
+  const setRefs = useCallback(
+    (node: HTMLDivElement | null) => {
+      innerRef.current = node;
+      assignRef(ref, node);
+    },
+    [ref],
+  );
 
   return (
     <div 
+      ref={setRefs}
+      data-deck-level={level}
       onClick={() => setShowMenu(!showMenu)}
       onMouseLeave={() => setShowMenu(false)}
-      className={`w-full min-w-[70px] max-w-[85px] sm:min-w-[90px] sm:max-w-[130px] lg:max-w-[160px] aspect-[2/3] shrink-0 rounded-xl ${bgColors[level]} ring-1 ring-white/20 border-2 border-yellow-600/50 flex flex-col items-center justify-center shadow-lg relative group overflow-hidden cursor-pointer`}
+      className="w-full min-w-[70px] max-w-[85px] sm:min-w-[90px] sm:max-w-[130px] lg:max-w-[160px] aspect-[2/3] shrink-0 rounded-xl ring-1 ring-white/25 border-2 border-yellow-600/50 shadow-lg relative group overflow-hidden cursor-pointer bg-zinc-900"
     >
-      <DeckTexture isDark={isDark} />
-      
-      <span className="text-yellow-400 font-serif font-bold text-[10px] sm:text-lg lg:text-2xl drop-shadow-md relative z-10">Splendor</span>
-      <span className="text-white/80 text-[8px] sm:text-xs lg:text-sm font-serif mt-0.5 sm:mt-1 relative z-10">{count} cards</span>
-      
-      <div className="absolute bottom-2 sm:bottom-3 lg:bottom-4 left-0 w-full flex justify-center gap-1 z-10">
-        {dots.map((_, i) => <div key={i} className="w-1.5 h-1.5 sm:w-2 sm:h-2 lg:w-3 lg:h-3 bg-white rounded-full shadow-sm" />)}
+      <div
+        className="pointer-events-none absolute inset-0 z-0"
+        style={cardDeckBackStyle(level, dw, dh)}
+      />
+      <div className="pointer-events-none absolute left-1 top-1 z-10 rounded bg-black/55 px-1 py-0.5 sm:left-1.5 sm:top-1.5 sm:px-1.5 sm:py-0.5 font-sans text-[10px] font-bold tabular-nums text-white shadow sm:text-xs">
+        {count}
       </div>
       
       {turnPhase === 'MainAction' && count > 0 && (
@@ -212,4 +276,4 @@ export const Deck = (props: DeckProps) => {
       )}
     </div>
   );
-};
+});

@@ -76,10 +76,11 @@ export const NobleTile = ({ noble, onClick, isSelectable }: NobleTileProps) => {
             const vpMd = prestigePointsSpriteStyle(noble.prestigePoints, 22);
             const vpLg = prestigePointsSpriteStyle(noble.prestigePoints, 28);
             return (
-              <div className="absolute top-0.5 right-1 sm:top-1 sm:right-1.5 lg:top-1.5 lg:right-2">
+              <div className="absolute top-0.5 right-0 sm:top-1 sm:right-0 lg:top-1.5 lg:right-0">
                 {vpSm ? (
                   <>
-                    <span className="drop-shadow-[0_2px_2px_rgba(0,0,0,1)] sm:hidden" style={vpSm} />
+                    {/* Sprite-based digits need inline-block for width/height to apply on mobile. */}
+                    <span className="inline-block drop-shadow-[0_2px_2px_rgba(0,0,0,1)] sm:hidden" style={vpSm} />
                     <span className="drop-shadow-[0_2px_2px_rgba(0,0,0,1)] hidden sm:inline-block lg:hidden" style={vpMd!} />
                     <span className="drop-shadow-[0_2px_2px_rgba(0,0,0,1)] hidden lg:inline-block" style={vpLg!} />
                   </>

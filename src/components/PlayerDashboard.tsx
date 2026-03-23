@@ -172,25 +172,41 @@ export const PlayerDashboard = ({ player, isActive, isCurrentPlayer, turnPhase, 
         <div className={`text-[10px] uppercase tracking-wider mb-2 font-semibold font-sans ${isDark ? 'text-stone-500' : 'text-gray-500'}`}>
           Reserved ({player.reservedCards.length}/3)
         </div>
-        {player.reservedCards.length > 0 && (
-          <div className="grid grid-cols-3 gap-3 justify-items-center items-center">
-            {player.reservedCards.map(card => (
+        {/* Keep height stable across players by always rendering 3 slots */}
+        <div className="grid grid-cols-3 gap-3 justify-items-center items-center">
+          {Array.from({ length: 3 }).map((_, idx) => {
+            const reserved = player.reservedCards[idx];
+            if (!reserved) {
+              return (
+                <div
+                  key={`empty-${idx}`}
+                  className="w-full flex justify-center invisible"
+                  aria-hidden
+                >
+                  <div
+                    className="w-full min-w-[70px] max-w-[85px] sm:min-w-[90px] sm:max-w-[130px] lg:max-w-[160px] lg:min-w-[120px] aspect-[2/3] rounded-xl border-2 border-transparent"
+                  />
+                </div>
+              );
+            }
+
+            return (
               <div
-                key={card.id}
-                data-reserved-card={card.id}
+                key={reserved.id}
+                data-reserved-card={reserved.id}
                 className="w-full flex justify-center"
               >
-                <DevelopmentCard 
-                  card={card}
-                  affordable={canAffordCard(player, card)}
+                <DevelopmentCard
+                  card={reserved}
+                  affordable={canAffordCard(player, reserved)}
                   turnPhase={turnPhase}
-                  onBuy={isCurrentPlayer ? () => onBuyReserved(card.id) : undefined}
+                  onBuy={isCurrentPlayer ? () => onBuyReserved(reserved.id) : undefined}
                   isReserved={true}
                 />
               </div>
-            ))}
-          </div>
-        )}
+            );
+          })}
+        </div>
       </div>
     </div>
   );

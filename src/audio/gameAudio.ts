@@ -1,5 +1,5 @@
 /**
- * Lightweight procedural SFX via Web Audio API (no asset files).
+ * Lightweight procedural SFX + background music via Web Audio API (no asset files).
  * Requires a user gesture; GameAudioProvider primes resume on first click/keydown.
  */
 
@@ -142,5 +142,228 @@ export function playGameSound(id: GameSoundId): void {
       break;
     default:
       break;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Procedural background music — multiple tracks
+// ---------------------------------------------------------------------------
+
+export type MusicTrackId = 'mystic' | 'royal' | 'dungeon' | 'tavern' | 'none';
+
+export const MUSIC_TRACKS: { id: MusicTrackId; label: string }[] = [
+  { id: 'none',    label: 'Off' },
+  { id: 'mystic',  label: 'Mystic' },
+  { id: 'royal',   label: 'Royal' },
+  { id: 'dungeon', label: 'Dungeon' },
+  { id: 'tavern',  label: 'Tavern' },
+];
+
+const MUSIC_STORAGE_KEY = 'splendor:musicTrack';
+
+export function getSavedMusicTrack(): MusicTrackId {
+  try {
+    const v = window.localStorage.getItem(MUSIC_STORAGE_KEY) as MusicTrackId | null;
+    if (v && MUSIC_TRACKS.some((t) => t.id === v)) return v;
+  } catch { /* ignore */ }
+  return 'mystic';
+}
+
+export function saveMusicTrack(id: MusicTrackId): void {
+  try { window.localStorage.setItem(MUSIC_STORAGE_KEY, id); } catch { /* ignore */ }
+}
+
+// ---- shared helpers --------------------------------------------------------
+
+function bgTone(
+  ctx: AudioContext,
+  dest: AudioNode,
+  freq: number,
+  t: number,
+  dur: number,
+  vol: number,
+  type: OscillatorType = 'sine',
+): void {
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t);
+  const v = Math.min(0.25, Math.max(0.0001, vol));
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(v, t + 0.05);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.88);
+  osc.connect(g);
+  g.connect(dest);
+  osc.start(t);
+  osc.stop(t + dur + 0.01);
+}
+
+// ---- track definitions -----------------------------------------------------
+
+/**
+ * Mystic: D natural-minor pentatonic, soft arpeggios + pad — calm & atmospheric.
+ */
+function createMysticTick(ctx: AudioContext, master: GainNode) {
+  const NOTES = [146.83, 174.61, 196.00, 220.00, 261.63, 293.66, 349.23, 392.00, 440.00, 523.25];
+  const PAT   = [0, 2, 3, 4, 5, 4, 3, 2, 1, 2, 4, 5, 7, 5, 4, 3];
+  const BASS  = [73.42, 110.00, 73.42, 98.00];
+  const STEP  = 0.38;
+  let idx = 0;
+  const tick = () => {
+    if (!bgRunning || bgMasterGain !== master) return;
+    const c = getAudioContext();
+    if (!c) return;
+    const now = c.currentTime;
+    const pi = idx % PAT.length;
+    bgTone(c, master, NOTES[PAT[pi]], now, STEP * 0.75, 0.042);
+    if (pi % 4 === 0) bgTone(c, master, BASS[Math.floor(pi / 4) % BASS.length], now, STEP * 3.8, 0.032, 'triangle');
+    if (pi % 8 === 0) {
+      const r = NOTES[PAT[pi]];
+      bgTone(c, master, r * 1.5, now, STEP * 7, 0.016, 'sine');
+      bgTone(c, master, r * 1.189, now, STEP * 7, 0.012, 'sine');
+    }
+    idx++;
+    bgScheduleTimer = setTimeout(tick, STEP * 940);
+  };
+  return tick;
+}
+
+/**
+ * Royal: C major, bright arpeggios — merchant court vibes.
+ */
+function createRoyalTick(ctx: AudioContext, master: GainNode) {
+  const NOTES = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25, 587.33, 659.25];
+  const PAT   = [0, 2, 4, 5, 7, 5, 4, 2, 0, 2, 4, 7, 9, 7, 5, 4];
+  const BASS  = [130.81, 164.81, 130.81, 196.00];
+  const STEP  = 0.30;
+  let idx = 0;
+  const tick = () => {
+    if (!bgRunning || bgMasterGain !== master) return;
+    const c = getAudioContext();
+    if (!c) return;
+    const now = c.currentTime;
+    const pi = idx % PAT.length;
+    bgTone(c, master, NOTES[PAT[pi]], now, STEP * 0.65, 0.038, 'triangle');
+    if (pi % 4 === 0) bgTone(c, master, BASS[Math.floor(pi / 4) % BASS.length], now, STEP * 3.5, 0.028, 'triangle');
+    if (pi % 8 === 0) {
+      const r = NOTES[PAT[pi]];
+      bgTone(c, master, r * 1.25, now, STEP * 6, 0.014, 'sine');
+      bgTone(c, master, r * 1.5, now, STEP * 6, 0.010, 'sine');
+    }
+    idx++;
+    bgScheduleTimer = setTimeout(tick, STEP * 940);
+  };
+  return tick;
+}
+
+/**
+ * Dungeon: C Phrygian, slow and sparse — tense, dark atmosphere.
+ */
+function createDungeonTick(ctx: AudioContext, master: GainNode) {
+  const NOTES = [130.81, 138.59, 155.56, 174.61, 196.00, 207.65, 233.08, 261.63, 277.18, 311.13];
+  const PAT   = [0, 0, 2, 0, 4, 2, 0, 6, 4, 2, 0, 2, 4, 0, 6, 4];
+  const BASS  = [65.41, 65.41, 87.31, 65.41];
+  const STEP  = 0.55;
+  let idx = 0;
+  const tick = () => {
+    if (!bgRunning || bgMasterGain !== master) return;
+    const c = getAudioContext();
+    if (!c) return;
+    const now = c.currentTime;
+    const pi = idx % PAT.length;
+    bgTone(c, master, NOTES[PAT[pi]], now, STEP * 0.9, 0.035, 'sine');
+    if (pi % 4 === 0) bgTone(c, master, BASS[Math.floor(pi / 4) % BASS.length], now, STEP * 4.5, 0.040, 'sine');
+    if (pi % 8 === 0) {
+      const r = NOTES[PAT[pi]];
+      bgTone(c, master, r * 1.333, now, STEP * 9, 0.018, 'sine');
+    }
+    idx++;
+    bgScheduleTimer = setTimeout(tick, STEP * 940);
+  };
+  return tick;
+}
+
+/**
+ * Tavern: G Mixolydian, lively jig feel — warm and energetic.
+ */
+function createTavernTick(ctx: AudioContext, master: GainNode) {
+  const NOTES = [196.00, 220.00, 246.94, 261.63, 293.66, 329.63, 369.99, 392.00, 440.00, 493.88];
+  const PAT   = [0, 2, 4, 5, 4, 2, 0, 2, 4, 7, 5, 4, 5, 7, 9, 7];
+  const BASS  = [98.00, 123.47, 98.00, 130.81];
+  const STEP  = 0.25;
+  let idx = 0;
+  const tick = () => {
+    if (!bgRunning || bgMasterGain !== master) return;
+    const c = getAudioContext();
+    if (!c) return;
+    const now = c.currentTime;
+    const pi = idx % PAT.length;
+    bgTone(c, master, NOTES[PAT[pi]], now, STEP * 0.6, 0.044, 'triangle');
+    if (pi % 4 === 0) bgTone(c, master, BASS[Math.floor(pi / 4) % BASS.length], now, STEP * 3, 0.034, 'sine');
+    if (pi % 8 === 0) {
+      const r = NOTES[PAT[pi]];
+      bgTone(c, master, r * 1.5, now, STEP * 5, 0.013, 'sine');
+    }
+    idx++;
+    bgScheduleTimer = setTimeout(tick, STEP * 940);
+  };
+  return tick;
+}
+
+// ---- state & public API ----------------------------------------------------
+
+let bgRunning = false;
+let bgScheduleTimer: ReturnType<typeof setTimeout> | null = null;
+let bgMasterGain: GainNode | null = null;
+let bgCurrentTrack: MusicTrackId = 'none';
+
+export function startBackgroundMusic(trackId?: MusicTrackId): void {
+  const id = trackId ?? bgCurrentTrack;
+  if (id === 'none') { stopBackgroundMusic(); return; }
+
+  // If already playing the same track, do nothing
+  if (bgRunning && bgCurrentTrack === id) return;
+
+  stopBackgroundMusic();
+
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  bgRunning = true;
+  bgCurrentTrack = id;
+
+  const master = ctx.createGain();
+  master.gain.setValueAtTime(0.0001, ctx.currentTime);
+  master.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 3.5);
+  master.connect(ctx.destination);
+  bgMasterGain = master;
+
+  const tickMap: Record<Exclude<MusicTrackId, 'none'>, (c: AudioContext, m: GainNode) => () => void> = {
+    mystic:  createMysticTick,
+    royal:   createRoyalTick,
+    dungeon: createDungeonTick,
+    tavern:  createTavernTick,
+  };
+
+  const factory = tickMap[id as Exclude<MusicTrackId, 'none'>];
+  if (factory) factory(ctx, master)();
+}
+
+export function stopBackgroundMusic(): void {
+  bgRunning = false;
+  if (bgScheduleTimer != null) {
+    clearTimeout(bgScheduleTimer);
+    bgScheduleTimer = null;
+  }
+  const ctx = getAudioContext();
+  if (bgMasterGain && ctx) {
+    const g = bgMasterGain;
+    bgMasterGain = null;
+    try {
+      g.gain.cancelScheduledValues(ctx.currentTime);
+      g.gain.setValueAtTime(g.gain.value, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 1.8);
+    } catch { /* ignore */ }
+    setTimeout(() => { try { g.disconnect(); } catch { /* ignore */ } }, 2200);
   }
 }

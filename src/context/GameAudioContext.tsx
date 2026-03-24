@@ -4,12 +4,19 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
   playGameSound as playRaw,
   resumeAudioContext,
+  startBackgroundMusic,
+  stopBackgroundMusic,
+  getSavedMusicTrack,
+  saveMusicTrack,
+  MUSIC_TRACKS,
   type GameSoundId,
+  type MusicTrackId,
 } from "../audio/gameAudio";
 
 const STORAGE_KEY = "splendor:soundMuted";
@@ -18,12 +25,19 @@ type GameAudioContextValue = {
   muted: boolean;
   toggleMuted: () => void;
   play: (id: GameSoundId) => void;
+  startMusic: () => void;
+  stopMusic: () => void;
+  musicTrack: MusicTrackId;
+  setMusicTrack: (id: MusicTrackId) => void;
+  musicTracks: typeof MUSIC_TRACKS;
 };
 
 const GameAudioContext = createContext<GameAudioContextValue | null>(null);
 
 export function GameAudioProvider({ children }: { children: React.ReactNode }) {
   const [muted, setMuted] = useState(false);
+  const [musicTrack, setMusicTrackState] = useState<MusicTrackId>('mystic');
+  const musicActiveRef = useRef(false);
 
   useEffect(() => {
     try {
@@ -31,6 +45,7 @@ export function GameAudioProvider({ children }: { children: React.ReactNode }) {
     } catch {
       /* ignore */
     }
+    setMusicTrackState(getSavedMusicTrack());
   }, []);
 
   useEffect(() => {
@@ -42,6 +57,15 @@ export function GameAudioProvider({ children }: { children: React.ReactNode }) {
       document.removeEventListener("keydown", unlock);
     };
   }, []);
+
+  // Sync music playback with mute state changes
+  useEffect(() => {
+    if (muted && musicActiveRef.current) {
+      stopBackgroundMusic();
+    } else if (!muted && musicActiveRef.current) {
+      startBackgroundMusic();
+    }
+  }, [muted]);
 
   const toggleMuted = useCallback(() => {
     setMuted((m) => {
@@ -59,9 +83,29 @@ export function GameAudioProvider({ children }: { children: React.ReactNode }) {
     [muted],
   );
 
+  const startMusic = useCallback(() => {
+    musicActiveRef.current = true;
+    if (!muted) startBackgroundMusic(musicTrack);
+  }, [muted, musicTrack]);
+
+  const stopMusic = useCallback(() => {
+    musicActiveRef.current = false;
+    stopBackgroundMusic();
+  }, []);
+
+  const setMusicTrack = useCallback((id: MusicTrackId) => {
+    saveMusicTrack(id);
+    setMusicTrackState(id);
+    if (musicActiveRef.current && !muted) {
+      startBackgroundMusic(id);
+    } else if (id === 'none') {
+      stopBackgroundMusic();
+    }
+  }, [muted]);
+
   const value = useMemo(
-    () => ({ muted, toggleMuted, play }),
-    [muted, toggleMuted, play],
+    () => ({ muted, toggleMuted, play, startMusic, stopMusic, musicTrack, setMusicTrack, musicTracks: MUSIC_TRACKS }),
+    [muted, toggleMuted, play, startMusic, stopMusic, musicTrack, setMusicTrack],
   );
 
   return (
@@ -77,4 +121,4 @@ export function useGameAudio(): GameAudioContextValue {
   return ctx;
 }
 
-export type { GameSoundId };
+export type { GameSoundId, MusicTrackId };

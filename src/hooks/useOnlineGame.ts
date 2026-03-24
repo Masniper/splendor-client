@@ -477,6 +477,10 @@ export function useOnlineGame({
       const w = payload?.winner;
       if (w?.name === localPlayerName) playRef.current?.("win");
       else if (w) playRef.current?.("lose");
+      // Apply finalState so gameState.winner is set and GameOverModal renders
+      if (payload?.finalState) {
+        setGameState(payload.finalState);
+      }
       setGameOverInfo(payload ?? null);
     };
 

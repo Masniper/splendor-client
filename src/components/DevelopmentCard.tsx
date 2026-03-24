@@ -154,7 +154,7 @@ export const DevelopmentCard = (props: CardProps) => {
         />
       )}
 
-      <div className="relative h-full w-full overflow-hidden rounded-xl">
+      <div className="relative h-full w-full overflow-hidden rounded-xl flex flex-col">
         {cardSheetIndex != null ? (
           <div
             className="pointer-events-none absolute inset-0 z-0"

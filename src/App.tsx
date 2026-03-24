@@ -184,8 +184,8 @@ export default function App() {
         console.log('[App] Socket disconnected, showing reconnect modal for room:', roomCode);
         setDisconnectedRoomCode(roomCode);
         setShowReconnectModal(true);
-        setReconnectCountdown(120);
-        showToast('Connection lost. You have 2 minutes to reconnect.', 'error');
+        setReconnectCountdown(300);
+        showToast('Connection lost. You have 5 minutes to reconnect.', 'error');
       }
     };
 

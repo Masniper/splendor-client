@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Volume2, VolumeX } from "lucide-react";
+import { Music, Volume2, VolumeX } from "lucide-react";
 import { CenterBoard } from "../components/CenterBoard";
 import { GameOverModal } from "../components/GameOverModal";
 import { HowToPlayModal } from "../components/HowToPlayModal";
@@ -106,7 +106,20 @@ export function GamePage(props: GamePageProps) {
     actions,
   } = props;
 
-  const { play, muted, toggleMuted } = useGameAudio();
+  const { play, muted, toggleMuted, startMusic, stopMusic, musicTrack, setMusicTrack, musicTracks } = useGameAudio();
+  const [showMusicPicker, setShowMusicPicker] = useState(false);
+  const musicPickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showMusicPicker) return;
+    const handler = (e: MouseEvent) => {
+      if (musicPickerRef.current && !musicPickerRef.current.contains(e.target as Node)) {
+        setShowMusicPicker(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showMusicPicker]);
   const isDark = theme === "dark";
   const [showRules, setShowRules] = useState(false);
   const {
@@ -124,6 +137,17 @@ export function GamePage(props: GamePageProps) {
     null,
   );
   const [reconnectCountdown, setReconnectCountdown] = useState<number>(120);
+
+  // Start background music when game is active; stop when game ends or component unmounts
+  useEffect(() => {
+    if (!gameState.winner) {
+      startMusic();
+    } else {
+      stopMusic();
+    }
+    return () => stopMusic();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState.winner]);
 
   // Tick for timers rendered from expiresAt
   const [nowTick, setNowTick] = useState(() => Date.now());
@@ -752,6 +776,48 @@ export function GamePage(props: GamePageProps) {
           >
             {muted ? <VolumeX className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden /> : <Volume2 className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden />}
           </button>
+          <div className="relative" ref={musicPickerRef}>
+            <button
+              type="button"
+              title="Background music"
+              onClick={() => { play("uiTap"); setShowMusicPicker((p) => !p); }}
+              className={`p-1.5 sm:p-3 rounded-full transition-all shadow-md ${
+                isDark ? "bg-zinc-800 text-amber-400 hover:bg-zinc-700" : "bg-white text-amber-600 hover:bg-gray-50 border border-gray-200"
+              } ${musicTrack === 'none' || muted ? "opacity-60" : ""}`}
+            >
+              <Music className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden />
+            </button>
+            {showMusicPicker && (
+              <div
+                className={`absolute right-0 top-full mt-2 z-50 rounded-xl shadow-2xl overflow-hidden min-w-[130px] border ${
+                  isDark ? "bg-zinc-900 border-zinc-700" : "bg-white border-gray-200"
+                }`}
+              >
+                {musicTracks.map((track) => (
+                  <button
+                    key={track.id}
+                    type="button"
+                    onClick={() => {
+                      play("uiTap");
+                      setMusicTrack(track.id);
+                      setShowMusicPicker(false);
+                    }}
+                    className={`w-full text-left px-4 py-2 text-sm font-medium transition-colors ${
+                      musicTrack === track.id
+                        ? isDark
+                          ? "bg-amber-600/30 text-amber-400"
+                          : "bg-amber-50 text-amber-700"
+                        : isDark
+                          ? "text-zinc-300 hover:bg-zinc-800"
+                          : "text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    {musicTrack === track.id ? "✓ " : "\u00A0\u00A0"}{track.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button
             type="button"
             onClick={() => {
